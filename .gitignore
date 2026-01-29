@@ -1,0 +1,76 @@
+# 敏感配置文件
+config/config.yaml
+config/*.secret.*
+*.pem
+*.key
+
+# GCP服务账号
+*-service-account.json
+service-account*.json
+
+# 环境变量
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# 虚拟环境
+venv/
+.venv/
+ENV/
+env/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# 测试
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+
+# 日志
+logs/
+*.log
+
+# 测试数据（大文件）
+data/beir/
+data/raw/
+*.csv
+*.parquet
+
+# 测试结果（可选择保留）
+# results/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Jupyter
+.ipynb_checkpoints/
