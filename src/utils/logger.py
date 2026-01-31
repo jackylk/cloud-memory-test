@@ -131,30 +131,36 @@ class StepLogger:
             raise
 
     def step(self, step_name: str, detail: str = ""):
-        """输出一个步骤（简单模式）
+        """输出一个步骤
+
+        支持两种使用方式:
+        1. 上下文管理器: with step_logger.step("描述") as ctx: ...
+        2. 简单模式: step_logger.step("名称", "详情")
 
         Args:
             step_name: 步骤名称
             detail: 步骤详情（可选）
 
         Returns:
-            如果只传 step_name，返回上下文管理器（兼容旧用法）
+            如果没有 detail，返回上下文管理器（用于 with 语句）
+            如果有 detail，返回 None（简单模式）
         """
-        # 如果没有 detail 且是被当作上下文管理器使用，返回上下文
-        # 这里简单处理：总是记录步骤
-        self.current_step += 1
-        step_time = time.time()
-        self.step_times.append(step_time)
-
-        if self.total_steps > 0:
-            progress = f"[{self.current_step}/{self.total_steps}]"
-        else:
-            progress = f"[{self.current_step}]"
-
         if detail:
+            # 简单模式：直接输出
+            self.current_step += 1
+            step_time = time.time()
+            self.step_times.append(step_time)
+
+            if self.total_steps > 0:
+                progress = f"[{self.current_step}/{self.total_steps}]"
+            else:
+                progress = f"[{self.current_step}]"
+
             logger.info(f"{progress} {step_name}: {detail}")
+            return None
         else:
-            logger.info(f"{progress} {step_name}")
+            # 上下文管理器模式
+            return self.step_context(step_name)
 
     def detail(self, message: str):
         """输出步骤详情"""

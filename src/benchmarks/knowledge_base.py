@@ -20,6 +20,7 @@ class KBTestConfig:
     top_k: int = 5
     concurrency_levels: List[int] = field(default_factory=lambda: [1])
     include_quality_metrics: bool = True
+    query_type: str = "default"  # "default" 或 "elementary"
 
 
 # 预定义测试配置
@@ -118,7 +119,7 @@ class KnowledgeBaseBenchmark:
             doc_count = self._get_doc_count(scale)
             documents = self.data_generator.generate_documents(count=doc_count)
             queries_with_truth = self.data_generator.generate_queries_with_ground_truth(
-                documents, queries_per_topic=2
+                documents, queries_per_topic=2, query_type=self.config.query_type
             )
 
             # 初始化适配器

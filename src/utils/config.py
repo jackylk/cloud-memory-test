@@ -45,6 +45,7 @@ class LargeDataConfig(BaseModel):
 class DataConfig(BaseModel):
     """数据配置"""
     scale: Literal["tiny", "small", "medium", "large"] = "tiny"
+    query_type: Literal["default", "elementary"] = "default"  # 查询类型
     tiny: TinyDataConfig = Field(default_factory=TinyDataConfig)
     small: SmallDataConfig = Field(default_factory=SmallDataConfig)
     medium: MediumDataConfig = Field(default_factory=MediumDataConfig)
@@ -80,6 +81,7 @@ class AWSConfig(BaseModel):
     secret_access_key: Optional[SecretStr] = None
     region: str = "us-east-1"
     knowledge_base_id: Optional[str] = None
+    knowledge_base_id_aurora: Optional[str] = None
     memory_id: Optional[str] = None
 
 
@@ -95,6 +97,11 @@ class VolcengineConfig(BaseModel):
     access_key: Optional[SecretStr] = None
     secret_key: Optional[SecretStr] = None
     region: str = "cn-beijing"
+    collection_name: Optional[str] = None
+    host: str = "api-knowledgebase.mlp.cn-beijing.volces.com"
+    dense_weight: float = 0.5
+    rerank_switch: bool = True
+    rerank_model: str = "m3-v2-rerank"
 
 
 class AliyunConfig(BaseModel):
@@ -102,6 +109,14 @@ class AliyunConfig(BaseModel):
     access_key_id: Optional[SecretStr] = None
     access_key_secret: Optional[SecretStr] = None
     region: str = "cn-hangzhou"
+    workspace_id: Optional[str] = None
+    index_id: Optional[str] = None
+    endpoint: str = "bailian.cn-beijing.aliyuncs.com"
+    dense_similarity_top_k: int = 100
+    sparse_similarity_top_k: int = 100
+    enable_reranking: bool = True
+    rerank_top_n: int = 5
+    rerank_min_score: float = 0.01
 
 
 class HuaweiConfig(BaseModel):
@@ -109,6 +124,15 @@ class HuaweiConfig(BaseModel):
     ak: Optional[SecretStr] = None
     sk: Optional[SecretStr] = None
     region: str = "cn-north-4"
+
+
+class OpenSearchConfig(BaseModel):
+    """OpenSearch Serverless 配置"""
+    host: Optional[str] = None
+    region: str = "ap-southeast-1"
+    index_name: str = "benchmark-test-index"
+    embedding_model: str = "all-MiniLM-L6-v2"
+    dimension: int = 384
 
 
 class BenchmarkConfig(BaseModel):
@@ -136,6 +160,7 @@ class Config(BaseModel):
     volcengine: VolcengineConfig = Field(default_factory=VolcengineConfig)
     aliyun: AliyunConfig = Field(default_factory=AliyunConfig)
     huawei: HuaweiConfig = Field(default_factory=HuaweiConfig)
+    opensearch: OpenSearchConfig = Field(default_factory=OpenSearchConfig)
     benchmark: BenchmarkConfig = Field(default_factory=BenchmarkConfig)
     report: ReportConfig = Field(default_factory=ReportConfig)
 

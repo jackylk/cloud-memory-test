@@ -374,7 +374,8 @@ class MetricsCollector:
         self,
         predictions: List[List[str]],
         ground_truth: List[List[str]],
-        k_values: List[int] = [1, 5, 10]
+        k_values: List[int] = [1, 5, 10],
+        use_fuzzy_match: bool = True
     ) -> QualityMetrics:
         """计算检索质量指标
 
@@ -382,6 +383,7 @@ class MetricsCollector:
             predictions: 每个查询返回的文档ID列表
             ground_truth: 每个查询的相关文档ID列表
             k_values: 计算 Precision@K 的K值
+            use_fuzzy_match: 是否使用模糊匹配（文件名部分匹配）
 
         Returns:
             质量指标
@@ -394,12 +396,52 @@ class MetricsCollector:
 
         n_queries = len(predictions)
 
+        # 文件名模糊匹配辅助函数
+        def is_match(pred: str, truth_list: List[str]) -> bool:
+            """检查预测的文档是否匹配ground truth中的任何文档
+
+            支持：
+            1. 精确匹配
+            2. 文件名匹配（去除路径和扩展名后）
+            3. 部分包含匹配
+            """
+            if not pred or not truth_list:
+                return False
+
+            # 确保pred是字符串类型（某些适配器可能返回整数ID）
+            pred = str(pred)
+
+            # 清理预测的ID（去除路径前缀）
+            pred_clean = pred.split("/")[-1]  # 去除路径
+            pred_name = pred_clean.rsplit(".", 1)[0] if "." in pred_clean else pred_clean  # 去除扩展名
+
+            for truth in truth_list:
+                # 1. 精确匹配
+                if pred == truth:
+                    return True
+
+                # 2. 文件名匹配
+                truth_clean = truth.split("/")[-1]
+                truth_name = truth_clean.rsplit(".", 1)[0] if "." in truth_clean else truth_clean
+
+                if pred_clean == truth_clean or pred_name == truth_name:
+                    return True
+
+                # 3. 部分包含匹配（双向）
+                if use_fuzzy_match:
+                    if pred_name in truth_name or truth_name in pred_name:
+                        return True
+                    if pred_clean in truth_clean or truth_clean in pred_clean:
+                        return True
+
+            return False
+
         # Precision@K
         def precision_at_k(preds: List[str], truth: List[str], k: int) -> float:
             if not preds or not truth:
                 return 0.0
             preds_k = preds[:k]
-            relevant = sum(1 for p in preds_k if p in truth)
+            relevant = sum(1 for p in preds_k if is_match(p, truth))
             return relevant / k
 
         # Recall@K
@@ -407,13 +449,13 @@ class MetricsCollector:
             if not truth:
                 return 0.0
             preds_k = preds[:k]
-            relevant = sum(1 for p in preds_k if p in truth)
+            relevant = sum(1 for p in preds_k if is_match(p, truth))
             return relevant / len(truth)
 
         # MRR (Mean Reciprocal Rank)
         def reciprocal_rank(preds: List[str], truth: List[str]) -> float:
             for i, p in enumerate(preds):
-                if p in truth:
+                if is_match(p, truth):
                     return 1.0 / (i + 1)
             return 0.0
 
@@ -426,7 +468,7 @@ class MetricsCollector:
                 )
 
             # 实际DCG
-            relevances = [1 if p in truth else 0 for p in preds[:k]]
+            relevances = [1 if is_match(p, truth) else 0 for p in preds[:k]]
             actual_dcg = dcg(relevances, k)
 
             # 理想DCG

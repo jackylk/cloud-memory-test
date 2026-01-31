@@ -15,7 +15,7 @@ from loguru import logger
 
 from .utils.config import load_config, Config
 from .utils.logger import setup_logger
-from .adapters.knowledge_base import SimpleVectorStore, MilvusAdapter, PineconeAdapter
+from .adapters.knowledge_base import SimpleVectorStore, MilvusAdapter, PineconeAdapter, AWSBedrockKBAdapter, OpenSearchServerlessAdapter
 from .adapters.memory import Mem0LocalAdapter, MilvusMemoryAdapter
 from .core.benchmark_runner import BenchmarkRunner
 from .core.orchestrator import TestOrchestrator, TestType, ConcurrencyConfig
@@ -78,9 +78,173 @@ def get_adapters(config: Config, adapter_type: str, adapter_names: list = None):
 
     elif config.mode == "cloud":
         # 云模式：使用云服务适配器
-        # TODO: 添加云服务适配器
-        logger.warning("云模式尚未实现，回退到本地模式")
-        return get_adapters(Config(mode="local"), adapter_type, adapter_names)
+        if adapter_type == "knowledge_base":
+            all_adapters = {}
+
+            # AWS Bedrock KB 适配器
+            aws_config = {
+                "region": config.aws.region,
+                "knowledge_base_id": config.aws.knowledge_base_id,
+            }
+            if config.aws.access_key_id:
+                aws_config["access_key_id"] = config.aws.access_key_id.get_secret_value()
+            if config.aws.secret_access_key:
+                aws_config["secret_access_key"] = config.aws.secret_access_key.get_secret_value()
+
+            # OpenSearch Serverless 适配器（本地 embedding + 云存储）
+            if config.opensearch.host:
+                os_config = {
+                    "host": config.opensearch.host,
+                    "region": config.opensearch.region,
+                    "index_name": config.opensearch.index_name,
+                    "embedding_model": config.opensearch.embedding_model,
+                    "dimension": config.opensearch.dimension,
+                }
+                if config.aws.access_key_id:
+                    os_config["access_key_id"] = config.aws.access_key_id.get_secret_value()
+                if config.aws.secret_access_key:
+                    os_config["secret_access_key"] = config.aws.secret_access_key.get_secret_value()
+
+                all_adapters["OpenSearchServerless"] = OpenSearchServerlessAdapter(os_config)
+
+            # 只有配置了 knowledge_base_id 才添加 Bedrock 适配器
+            if config.aws.knowledge_base_id:
+                opensearch_config = aws_config.copy()
+                opensearch_config["adapter_name"] = "AWSBedrockKB-OpenSearch"
+                all_adapters["AWSBedrockKB-OpenSearch"] = AWSBedrockKBAdapter(opensearch_config)
+
+            # Aurora PostgreSQL 后端的 Bedrock KB
+            if config.aws.knowledge_base_id_aurora:
+                aws_aurora_config = aws_config.copy()
+                aws_aurora_config["knowledge_base_id"] = config.aws.knowledge_base_id_aurora
+                aws_aurora_config["adapter_name"] = "AWSBedrockKB-Aurora"
+                all_adapters["AWSBedrockKB-Aurora"] = AWSBedrockKBAdapter(aws_aurora_config)
+
+            # 火山引擎 VikingDB 适配器
+            from .adapters.knowledge_base.volcengine_vikingdb import VolcengineVikingDBAdapter
+
+            volcengine_config = {
+                "region": config.volcengine.region,
+                "collection_name": getattr(config.volcengine, 'collection_name', None),
+                "host": getattr(config.volcengine, 'host', 'api-knowledgebase.mlp.cn-beijing.volces.com'),
+            }
+            if config.volcengine.access_key:
+                volcengine_config["access_key"] = config.volcengine.access_key.get_secret_value()
+            if config.volcengine.secret_key:
+                volcengine_config["secret_key"] = config.volcengine.secret_key.get_secret_value()
+
+            all_adapters["VolcengineVikingDB"] = VolcengineVikingDBAdapter(volcengine_config)
+
+            # 阿里百炼适配器
+            from .adapters.knowledge_base.alibaba_bailian import AlibabaBailianAdapter
+
+            aliyun_config = {
+                "region": config.aliyun.region,
+                "workspace_id": getattr(config.aliyun, 'workspace_id', None),
+                "index_id": getattr(config.aliyun, 'index_id', None),
+                "endpoint": getattr(config.aliyun, 'endpoint', 'bailian.cn-beijing.aliyuncs.com'),
+            }
+            if config.aliyun.access_key_id:
+                aliyun_config["access_key_id"] = config.aliyun.access_key_id.get_secret_value()
+            if config.aliyun.access_key_secret:
+                aliyun_config["access_key_secret"] = config.aliyun.access_key_secret.get_secret_value()
+
+            all_adapters["AlibabaBailian"] = AlibabaBailianAdapter(aliyun_config)
+
+            # Google Dialogflow CX 适配器 - 已禁用
+            # from .adapters.knowledge_base.google_dialogflow_cx import GoogleDialogflowCXAdapter
+            #
+            # gcp_config = {
+            #     "project_id": getattr(config.gcp, 'project_id', None),
+            #     "location": config.gcp.location,
+            #     "agent_id": getattr(config.gcp, 'agent_id', None),
+            #     "data_store_id": getattr(config.gcp, 'data_store_id', None),
+            #     "credentials_path": getattr(config.gcp, 'service_account_json', None),
+            # }
+            # all_adapters["GoogleDialogflowCX"] = GoogleDialogflowCXAdapter(gcp_config)
+
+            # 华为云 CSS 适配器 - 已暂时禁用
+            # from .adapters.knowledge_base.huawei_css import HuaweiCSSAdapter
+            #
+            # huawei_config = {
+            #     "region": config.huawei.region,
+            #     "cluster_id": getattr(config.huawei, 'cluster_id', None),
+            #     "endpoint": getattr(config.huawei, 'endpoint', None),
+            #     "index_name": getattr(config.huawei, 'index_name', 'benchmark-test-index'),
+            #     "es_username": getattr(config.huawei, 'es_username', 'admin'),
+            #     "es_password": getattr(config.huawei, 'es_password', None),
+            # }
+            # if config.huawei.ak:
+            #     huawei_config["ak"] = config.huawei.ak.get_secret_value()
+            # if config.huawei.sk:
+            #     huawei_config["sk"] = config.huawei.sk.get_secret_value()
+            #
+            # all_adapters["HuaweiCSS"] = HuaweiCSSAdapter(huawei_config)
+
+        elif adapter_type == "memory":
+            # 云模式记忆适配器
+            from .adapters.memory.aws_bedrock_memory import AWSBedrockMemoryAdapter
+            from .adapters.memory.google_vertex_memory import GoogleVertexMemoryAdapter
+            from .adapters.memory.volcengine_agentkit_memory import VolcengineAgentKitMemoryAdapter
+            from .adapters.memory.alibaba_bailian_memory import AlibabaBailianMemoryAdapter
+
+            all_adapters = {}
+
+            # AWS Bedrock Memory
+            aws_mem_config = {
+                "region": config.aws.region,
+                "memory_id": getattr(config.aws, 'memory_id', None),
+            }
+            if config.aws.access_key_id:
+                aws_mem_config["access_key_id"] = config.aws.access_key_id.get_secret_value()
+            if config.aws.secret_access_key:
+                aws_mem_config["secret_access_key"] = config.aws.secret_access_key.get_secret_value()
+
+            all_adapters["AWSBedrockMemory"] = AWSBedrockMemoryAdapter(aws_mem_config)
+
+            # Google Vertex AI Memory - 已禁用
+            # gcp_mem_config = {
+            #     "project_id": getattr(config.gcp, 'project_id', None),
+            #     "location": config.gcp.location,
+            #     "memory_bank_id": getattr(config.gcp, 'memory_bank_id', None),
+            #     "credentials_path": getattr(config.gcp, 'service_account_json', None),
+            # }
+            # all_adapters["GoogleVertexMemory"] = GoogleVertexMemoryAdapter(gcp_mem_config)
+
+            # Volcengine AgentKit Memory
+            volcengine_mem_config = {
+                "region": config.volcengine.region,
+                "agent_id": getattr(config.volcengine, 'agent_id', None),
+            }
+            if config.volcengine.access_key:
+                volcengine_mem_config["access_key"] = config.volcengine.access_key.get_secret_value()
+            if config.volcengine.secret_key:
+                volcengine_mem_config["secret_key"] = config.volcengine.secret_key.get_secret_value()
+
+            all_adapters["VolcengineAgentKitMemory"] = VolcengineAgentKitMemoryAdapter(volcengine_mem_config)
+
+            # Alibaba Bailian Memory
+            aliyun_mem_config = {
+                "workspace_id": getattr(config.aliyun, 'workspace_id', None),
+                "memory_id": getattr(config.aliyun, 'memory_id_for_longterm', None),
+                "endpoint": getattr(config.aliyun, 'endpoint', 'bailian.cn-beijing.aliyuncs.com'),
+            }
+            if config.aliyun.access_key_id:
+                aliyun_mem_config["access_key_id"] = config.aliyun.access_key_id.get_secret_value()
+            if config.aliyun.access_key_secret:
+                aliyun_mem_config["access_key_secret"] = config.aliyun.access_key_secret.get_secret_value()
+
+            all_adapters["AlibabaBailianMemory"] = AlibabaBailianMemoryAdapter(aliyun_mem_config)
+        else:
+            all_adapters = {}
+
+        # 筛选指定的适配器
+        if adapter_names:
+            for name in adapter_names:
+                if name in all_adapters:
+                    adapters[name] = all_adapters[name]
+        else:
+            adapters = all_adapters
 
     return adapters
 
@@ -96,7 +260,31 @@ def get_adapter_list(config: Config, adapter_type: str) -> list:
 @click.option("--verbose", "-v", is_flag=True, help="详细输出")
 @click.pass_context
 def cli(ctx, config, verbose):
-    """云端知识库和记忆系统性能测试工具"""
+    """云端知识库和记忆系统性能测试工具
+
+    支持的云服务:
+      - AWS Bedrock KB/Memory
+      - Google Vertex AI/Dialogflow CX
+      - 火山引擎 VikingDB/AgentKit
+      - 阿里云百炼
+      - 华为云 CSS
+      - OpenSearch Serverless
+
+    主要命令:
+      benchmark      运行基准测试（推荐）
+      list-adapters  列出所有可用的适配器
+      compare        对比所有适配器性能
+      report         从结果文件生成测试报告
+      info           显示当前配置
+
+    快速开始:
+      python -m src benchmark -s tiny -t all        # 运行tiny规模全部测试
+      python -m src benchmark -s tiny -r            # 运行测试并生成报告
+      python -m src list-adapters                   # 查看可用适配器
+      python -m src --help                          # 查看完整帮助
+
+    更多信息请查看: docs/README.md
+    """
     ctx.ensure_object(dict)
 
     # 加载配置
@@ -111,19 +299,36 @@ def cli(ctx, config, verbose):
 
 
 @cli.command()
-@click.option("--scale", "-s", default="tiny", type=click.Choice(["tiny", "small", "medium", "large"]))
-@click.option("--type", "-t", "test_type", default="all", type=click.Choice(["all", "kb", "memory"]))
-@click.option("--output", "-o", default=None, help="结果输出文件")
-@click.option("--report", "-r", is_flag=True, help="自动生成测试报告")
+@click.option("--scale", "-s", default="tiny", type=click.Choice(["tiny", "small", "medium", "large"]),
+              help="数据规模: tiny(10文档), small(100), medium(1000), large(10000)")
+@click.option("--type", "-t", "test_type", default="all", type=click.Choice(["all", "kb", "memory"]),
+              help="测试类型: all(全部), kb(知识库), memory(记忆系统)")
+@click.option("--output", "-o", default=None, help="保存结果到JSON文件（可选）")
+@click.option("--report", "-r", is_flag=True, help="运行后自动生成测试报告")
 @click.option("--report-dir", default="docs/test-reports", help="报告输出目录")
+@click.option("--skip-upload", is_flag=True, help="跳过文档上传（文档已预先入库）")
 @click.pass_context
-def benchmark(ctx, scale, test_type, output, report, report_dir):
+def benchmark(ctx, scale, test_type, output, report, report_dir, skip_upload):
     """运行基准测试
 
-    示例:
-        python -m src.main benchmark --scale tiny --type all
-        python -m src.main benchmark -s small -t kb -o results.json
-        python -m src.main benchmark -s tiny -r  # 自动生成报告
+    数据规模说明:
+      tiny    - 10个文档, 5个查询, 20个记忆（快速测试，约1分钟）
+      small   - 100个文档, 20个查询, 100个记忆（约5分钟）
+      medium  - 1000个文档, 50个查询, 500个记忆（约15分钟）
+      large   - 10000个文档, 100个查询, 2000个记忆（约1小时）
+
+    生成测试报告的两种方式:
+      方式1: 运行时直接生成
+        python -m src benchmark -s tiny -r
+
+      方式2: 先保存结果，再生成报告
+        python -m src benchmark -s tiny -o results.json
+        python -m src report results.json
+
+    常用示例:
+      python -m src benchmark -s tiny -t all -r    # 运行全部测试并生成报告
+      python -m src benchmark -s small -t kb       # 只测试知识库适配器
+      python -m src benchmark -s tiny -t memory    # 只测试记忆系统
     """
     config: Config = ctx.obj["config"]
 
@@ -159,7 +364,8 @@ def benchmark(ctx, scale, test_type, output, report, report_dir):
                     result = await runner.run_knowledge_base_benchmark(
                         adapter,
                         data_scale=scale,
-                        run_quality_test=True
+                        run_quality_test=True,
+                        skip_upload=skip_upload
                     )
                     results.append(result)
                 except Exception as e:
@@ -254,7 +460,14 @@ def benchmark(ctx, scale, test_type, output, report, report_dir):
 @cli.command()
 @click.pass_context
 def info(ctx):
-    """显示当前配置信息"""
+    """显示当前配置信息
+
+    显示运行模式、数据规模配置、适配器配置等信息。
+    用于确认配置文件是否正确加载。
+
+    示例:
+      python -m src info
+    """
     config: Config = ctx.obj["config"]
 
     click.echo("\n当前配置:")
@@ -278,16 +491,24 @@ def info(ctx):
 
 @cli.command()
 @click.argument("input_file", type=click.Path(exists=True))
-@click.option("--output", "-o", default="docs/test-reports", help="输出目录")
+@click.option("--output", "-o", default="docs/test-reports", help="报告输出目录")
 @click.option("--format", "-f", "formats", multiple=True, default=["markdown", "html"],
-              type=click.Choice(["markdown", "html"]), help="输出格式")
+              type=click.Choice(["markdown", "html"]), help="输出格式（可多选）")
 @click.pass_context
 def report(ctx, input_file, output, formats):
-    """从测试结果生成报告
+    """从测试结果JSON文件生成测试报告
+
+    支持的格式:
+      - markdown: 适合版本控制和查看
+      - html:     适合浏览器查看，包含图表
+
+    使用场景:
+      当使用 benchmark -o 保存了结果文件后，可以用此命令生成报告
 
     示例:
-        python -m src.main report results.json
-        python -m src.main report results.json -o reports/ -f html
+      python -m src report results.json                    # 生成markdown和html报告
+      python -m src report results.json -f markdown        # 只生成markdown
+      python -m src report results.json -o custom-dir/     # 指定输出目录
     """
     from .report import ReportGenerator
 
@@ -577,16 +798,21 @@ def stress_test(ctx, test_type, adapter, concurrency, duration):
 
 
 @cli.command()
-@click.option("--type", "-t", "test_type", default="kb", type=click.Choice(["kb", "memory"]))
-@click.option("--scale", "-s", default="tiny", type=click.Choice(["tiny", "small", "medium"]))
-@click.option("--queries", "-q", default=10, type=int, help="查询次数")
+@click.option("--type", "-t", "test_type", default="kb", type=click.Choice(["kb", "memory"]),
+              help="测试类型: kb(知识库) 或 memory(记忆系统)")
+@click.option("--scale", "-s", default="tiny", type=click.Choice(["tiny", "small", "medium"]),
+              help="数据规模")
+@click.option("--queries", "-q", default=10, type=int, help="每个适配器的查询次数")
 @click.pass_context
 def compare(ctx, test_type, scale, queries):
     """对比所有可用适配器的性能
 
+    快速对比测试，用于评估不同适配器的相对性能。
+    会测试所有可用的适配器，并生成性能对比报告。
+
     示例:
-        python -m src.main compare -t kb -s tiny -q 20
-        python -m src.main compare -t memory
+      python -m src compare -t kb -s tiny -q 20      # 对比知识库适配器
+      python -m src compare -t memory -q 10          # 对比记忆系统适配器
     """
     config: Config = ctx.obj["config"]
 
@@ -661,7 +887,14 @@ def compare(ctx, test_type, scale, queries):
 @cli.command()
 @click.pass_context
 def list_adapters(ctx):
-    """列出所有可用的适配器"""
+    """列出所有可用的适配器
+
+    显示当前配置下可用的知识库和记忆系统适配器。
+    如果某个云服务未配置凭证，该适配器将自动运行在mock模式。
+
+    示例:
+      python -m src list-adapters
+    """
     config: Config = ctx.obj["config"]
 
     click.echo("\n可用的知识库适配器:")
@@ -673,6 +906,137 @@ def list_adapters(ctx):
     memory_adapters = get_adapters(config, "memory")
     for name in memory_adapters.keys():
         click.echo(f"  - {name}")
+
+
+@cli.command()
+@click.option("--action", "-a", type=click.Choice(["list", "create", "delete", "cleanup"]),
+              default="list", help="操作类型")
+@click.option("--provider", "-p", help="云服务提供商 (volcengine, aliyun, gcp)")
+@click.option("--resource-type", "-t", type=click.Choice(["kb", "memory"]),
+              help="资源类型 (kb=知识库, memory=记忆库)")
+@click.option("--name", "-n", help="资源名称")
+@click.option("--resource-id", "-r", help="资源ID（用于删除）")
+@click.option("--confirm", is_flag=True, help="确认删除操作")
+@click.pass_context
+def cloud_resources(ctx, action, provider, resource_type, name, resource_id, confirm):
+    """管理云端知识库和记忆库资源
+
+    用于创建、查询、删除云服务资源，避免闲置资源产生费用。
+
+    操作类型:
+      list    - 列出所有云资源（默认）
+      create  - 创建新资源
+      delete  - 删除指定资源
+      cleanup - 删除所有资源（危险操作）
+
+    示例:
+      # 列出所有资源
+      python -m src cloud-resources
+
+      # 在火山引擎创建知识库
+      python -m src cloud-resources -a create -p volcengine -t kb -n test-kb
+
+      # 删除指定资源
+      python -m src cloud-resources -a delete -p volcengine -r collection-name --confirm
+
+      # 清理所有资源（需要确认）
+      python -m src cloud-resources -a cleanup --confirm
+    """
+    from .cloud_manager import CloudResourceManager
+
+    config: Config = ctx.obj["config"]
+
+    async def run_action():
+        manager = CloudResourceManager(config)
+
+        if action == "list":
+            logger.info("查询云资源...")
+            resources = await manager.list_all_resources()
+
+            if not resources:
+                click.echo("\n未找到云资源")
+                click.echo("提示: 您可以使用 -a create 创建测试资源")
+                return
+
+            click.echo(f"\n找到 {len(resources)} 个云资源:\n")
+            click.echo(f"{'云服务':<12} {'类型':<15} {'资源ID':<30} {'状态':<10}")
+            click.echo("-" * 70)
+
+            for res in resources:
+                click.echo(
+                    f"{res.provider:<12} "
+                    f"{res.resource_type.value:<15} "
+                    f"{res.resource_id:<30} "
+                    f"{res.status.value:<10}"
+                )
+
+            click.echo(f"\n已配置的云服务: {', '.join(manager.get_configured_providers())}")
+
+        elif action == "create":
+            if not provider or not resource_type or not name:
+                click.echo("错误: 创建资源需要 --provider, --resource-type 和 --name")
+                return
+
+            logger.info(f"创建资源: {provider}/{resource_type}/{name}")
+
+            try:
+                if resource_type == "kb":
+                    resource = await manager.create_knowledge_base(
+                        provider,
+                        name,
+                        {"dimension": 384, "description": f"Benchmark test - {name}"}
+                    )
+                else:
+                    resource = await manager.create_memory(
+                        provider,
+                        name,
+                        {"description": f"Benchmark test memory - {name}"}
+                    )
+
+                click.echo(f"\n✓ 资源创建成功!")
+                click.echo(f"  云服务: {resource.provider}")
+                click.echo(f"  类型: {resource.resource_type.value}")
+                click.echo(f"  资源ID: {resource.resource_id}")
+                click.echo(f"  名称: {resource.name}")
+
+                # 更新配置文件提示
+                click.echo(f"\n提示: 请将资源ID添加到 config/config.yaml 中:")
+                if provider == "volcengine" and resource_type == "kb":
+                    click.echo(f"  volcengine.collection_name: \"{resource.resource_id}\"")
+                elif provider == "aliyun" and resource_type == "kb":
+                    click.echo(f"  aliyun.index_id: \"{resource.resource_id}\"")
+
+            except Exception as e:
+                click.echo(f"\n✗ 创建失败: {e}")
+
+        elif action == "delete":
+            if not provider or not resource_id:
+                click.echo("错误: 删除资源需要 --provider 和 --resource-id")
+                return
+
+            if not confirm:
+                click.echo("警告: 删除操作不可恢复，请使用 --confirm 确认")
+                return
+
+            logger.info(f"删除资源: {provider}/{resource_id}")
+            success = await manager.delete_resource(provider, resource_id)
+
+            if success:
+                click.echo(f"\n✓ 资源删除成功: {resource_id}")
+            else:
+                click.echo(f"\n✗ 资源删除失败")
+
+        elif action == "cleanup":
+            if not confirm:
+                click.echo("警告: 此操作将删除所有云资源，不可恢复！")
+                click.echo("请使用 --confirm 确认")
+                return
+
+            click.echo("开始清理所有云资源...")
+            deleted_count = await manager.cleanup_all(confirm=True)
+            click.echo(f"\n✓ 已删除 {deleted_count} 个资源")
+
+    asyncio.run(run_action())
 
 
 def main():

@@ -56,7 +56,8 @@ class BenchmarkRunner:
         self,
         adapter: KnowledgeBaseAdapter,
         data_scale: str = "tiny",
-        run_quality_test: bool = True
+        run_quality_test: bool = True,
+        skip_upload: bool = False
     ) -> BenchmarkResult:
         """运行知识库基准测试
 
@@ -64,6 +65,7 @@ class BenchmarkRunner:
             adapter: 知识库适配器
             data_scale: 数据规模 (tiny, small, medium, large)
             run_quality_test: 是否运行质量测试
+            skip_upload: 是否跳过文档上传（文档已预先入库）
 
         Returns:
             测试结果
@@ -94,31 +96,49 @@ class BenchmarkRunner:
                 for key, value in stats.items():
                     ctx.detail(f"{key}: {value}")
 
-            # 步骤 2: 生成并上传文档
-            with step_logger.step("生成并上传文档") as ctx:
-                documents = self.data_generator.generate_documents(doc_count)
-                ctx.info(f"生成 {len(documents)} 个文档")
+            # 步骤 2: 生成并上传文档（可选）
+            # 生成文档用于质量评估（即使跳过上传）
+            documents = self.data_generator.generate_documents(doc_count)
 
-                upload_result = await adapter.upload_documents(documents)
-                ctx.info(f"上传完成: 成功 {upload_result.success_count}, 失败 {upload_result.failed_count}")
-                ctx.info(f"上传耗时: {upload_result.total_time_ms:.2f}ms")
+            if skip_upload:
+                with step_logger.step("跳过文档上传") as ctx:
+                    ctx.info(f"文档已预先入库（{doc_count}个）")
+                    ctx.info(f"生成 {len(documents)} 个文档用于质量评估")
+                    details["upload_time_ms"] = 0
+                    details["upload_success"] = 0
+                    details["upload_failed"] = 0
+            else:
+                with step_logger.step("生成并上传文档") as ctx:
+                    ctx.info(f"生成 {len(documents)} 个文档")
 
-                details["upload_time_ms"] = upload_result.total_time_ms
-                details["upload_success"] = upload_result.success_count
-                details["upload_failed"] = upload_result.failed_count
+                    upload_result = await adapter.upload_documents(documents)
+                    ctx.info(f"上传完成: 成功 {upload_result.success_count}, 失败 {upload_result.failed_count}")
+                    ctx.info(f"上传耗时: {upload_result.total_time_ms:.2f}ms")
 
-            # 步骤 3: 构建索引
-            with step_logger.step("构建索引") as ctx:
-                index_result = await adapter.build_index()
-                ctx.info(f"索引文档数: {index_result.doc_count}")
-                ctx.info(f"索引耗时: {index_result.index_time_ms:.2f}ms")
+                    details["upload_time_ms"] = upload_result.total_time_ms
+                    details["upload_success"] = upload_result.success_count
+                    details["upload_failed"] = upload_result.failed_count
 
-                details["index_time_ms"] = index_result.index_time_ms
-                details["indexed_docs"] = index_result.doc_count
+            # 步骤 3: 构建索引（可选）
+            if skip_upload:
+                with step_logger.step("跳过索引构建") as ctx:
+                    ctx.info(f"索引已存在")
+                    details["index_time_ms"] = 0
+                    details["indexed_docs"] = doc_count
+            else:
+                with step_logger.step("构建索引") as ctx:
+                    index_result = await adapter.build_index()
+                    ctx.info(f"索引文档数: {index_result.doc_count}")
+                    ctx.info(f"索引耗时: {index_result.index_time_ms:.2f}ms")
+
+                    details["index_time_ms"] = index_result.index_time_ms
+                    details["indexed_docs"] = index_result.doc_count
 
             # 步骤 4: 执行查询测试
             with step_logger.step("执行查询测试") as ctx:
-                queries = self.data_generator.generate_queries(query_count)
+                # 获取查询类型配置
+                query_type = self.config.get("data", {}).get("query_type", "default")
+                queries = self.data_generator.generate_queries(query_count, query_type=query_type)
                 ctx.info(f"执行 {len(queries)} 个查询")
 
                 for i, query in enumerate(queries):
@@ -146,21 +166,63 @@ class BenchmarkRunner:
                 quality_metrics = None
                 if run_quality_test:
                     ctx.info("执行质量评估...")
-                    queries_with_truth = self.data_generator.generate_queries_with_ground_truth(
-                        documents, queries_per_topic=2
-                    )
+
+                    if skip_upload:
+                        # 使用test-data文档进行质量评估
+                        ctx.info("使用test-data文档生成查询和ground truth")
+                        queries_with_truth = self.data_generator.generate_queries_from_test_data(
+                            test_data_dir="test-data",
+                            num_queries=min(20, query_count)
+                        )
+                    else:
+                        # 使用生成的文档进行质量评估
+                        query_type = self.config.get("data", {}).get("query_type", "default")
+                        queries_with_truth = self.data_generator.generate_queries_with_ground_truth(
+                            documents, queries_per_topic=2, query_type=query_type
+                        )
 
                     predictions = []
                     ground_truths = []
 
                     for query, truth in queries_with_truth:
                         result = await adapter.query(query, top_k=10)
-                        pred_ids = [doc.get("id") for doc in result.documents]
+
+                        # 提取返回文档的ID/文件名
+                        pred_ids = []
+                        for doc in result.documents:
+                            doc_id = doc.get("id", "")
+                            # 确保doc_id是字符串类型（某些适配器可能返回整数ID）
+                            doc_id = str(doc_id) if doc_id else ""
+                            # 从不同格式的ID中提取文件名
+                            # AWS Bedrock: s3://bucket/文件名.doc -> 文件名.doc
+                            # 阿里云/火山引擎: 从metadata中提取doc_name或直接使用content
+                            if "s3://" in doc_id:
+                                # AWS Bedrock格式
+                                file_name = doc_id.split("/")[-1]
+                                pred_ids.append(file_name)
+                            elif doc.get("title"):
+                                # 使用title作为标识
+                                pred_ids.append(doc.get("title"))
+                            elif doc.get("metadata", {}).get("doc_name"):
+                                # 使用metadata中的doc_name
+                                pred_ids.append(doc.get("metadata", {}).get("doc_name"))
+                            else:
+                                # 使用原始ID
+                                pred_ids.append(doc_id)
+
                         predictions.append(pred_ids)
                         ground_truths.append(truth)
 
                     quality_metrics = metrics.calculate_quality_metrics(predictions, ground_truths)
                     ctx.info(f"质量: {quality_metrics}")
+
+                    # 打印一些匹配样例用于调试
+                    if self.config.get("debug", {}).get("print_results", False) and queries_with_truth:
+                        ctx.info("质量评估样例:")
+                        for i, (query, truth) in enumerate(queries_with_truth[:3]):
+                            ctx.detail(f"  查询: '{query}'")
+                            ctx.detail(f"  Ground truth: {truth[:3]}")
+                            ctx.detail(f"  预测结果: {predictions[i][:3]}")
 
         except Exception as e:
             logger.error(f"测试过程中发生错误: {e}")

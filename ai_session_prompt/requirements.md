@@ -2,18 +2,17 @@
 
 现在我说需求，我的需求是：我正在对Agent知识库和记忆系统进行选型，想对比云上的几个系统的性能和成本，来决定用哪个更合适。我暂时想要测试这些系统：
 知识库：
-1. AWS BedRock KnowledgeBase
-2. GoogleCloud Dialogflow KnowledgeBase
+1. AWS BedRock KnowledgeBase backed by Opensearch Serverless
+2. AWS BedRock KnowledgeBase backed by Aurora PG Serverless
 3. 字节跳动的火山引擎里的Viking知识库
 4. 阿里云百炼平台知识库
 5. 华为云CSS服务
 
 记忆库：
 1. AWS BedRock Memory
-2. GoogleCloud VertexAI Agent Engine Memory Bank
-3. 字节跳动的火山引擎里的AgentKit Memory
-4. 阿里云百炼平台的长期记忆
-5. 本地的基于开源mem0的记忆系统
+2. 字节跳动的火山引擎里的AgentKit Memory
+3. 阿里云百炼平台的长期记忆
+4. 本地的基于开源mem0的记忆系统
 
 在开发这个项目时，请注意：
 1. 需要使用业界常见的测试benchmark来做测试，测试用例一致。对各个系统测试时使用的资源量也要一致，对比才有意义。

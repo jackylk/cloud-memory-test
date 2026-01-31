@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>云端知识库和记忆系统性能测试报告</title>
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background: #f5f5f5;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            padding: 40px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #2c3e50;
+            border-bottom: 3px solid #3498db;
+            padding-bottom: 15px;
+            margin-bottom: 30px;
+        }
+        h2 {
+            color: #34495e;
+            margin: 30px 0 20px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #eee;
+        }
+        h3 {
+            color: #7f8c8d;
+            margin: 20px 0 15px;
+        }
+        .meta {
+            color: #7f8c8d;
+            font-size: 14px;
+            margin-bottom: 30px;
+        }
+        .summary-cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin: 20px 0;
+        }
+        .card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 8px;
+            text-align: center;
+        }
+        .card.kb {
+            background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+        }
+        .card.memory {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+        }
+        .card-value {
+            font-size: 36px;
+            font-weight: bold;
+        }
+        .card-label {
+            font-size: 14px;
+            opacity: 0.9;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+        th, td {
+            padding: 12px 15px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+        th {
+            background: #f8f9fa;
+            font-weight: 600;
+            color: #2c3e50;
+        }
+        tr:hover {
+            background: #f8f9fa;
+        }
+        .chart-container {
+            margin: 30px 0;
+            padding: 20px;
+            background: #fafafa;
+            border-radius: 8px;
+        }
+        .footer {
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 1px solid #eee;
+            color: #7f8c8d;
+            font-size: 12px;
+            text-align: center;
+        }
+        .badge {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+        .badge-success {
+            background: #d4edda;
+            color: #155724;
+        }
+        .badge-info {
+            background: #d1ecf1;
+            color: #0c5460;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>云端知识库和记忆系统性能测试报告</h1>
+        <div class="meta">
+            生成时间: 2026-01-31 20:29:27 |
+            运行模式: <span class="badge badge-info">cloud</span> |
+            数据规模: <span class="badge badge-info">tiny</span>
+        </div>
+
+        <h2>测试概览</h2>
+        <div class="summary-cards">
+            <div class="card">
+                <div class="card-value">4</div>
+                <div class="card-label">总测试数</div>
+            </div>
+            <div class="card kb">
+                <div class="card-value">4</div>
+                <div class="card-label">知识库测试</div>
+            </div>
+            <div class="card memory">
+                <div class="card-value">0</div>
+                <div class="card-label">记忆系统测试</div>
+            </div>
+        </div>
+
+        <h2>📋 执行摘要</h2>
+<div class="section">
+<p>本次测试对比了 **4个云端知识库服务**，每个知识库已预先入库 **100个小学考试题目文档**：</p>
+<p>**AWS Bedrock Knowledge Base** 的两种存储后端：</p>
+<p>1. **OpenSearch Serverless** - P50: 1585.55ms, P95: 2461.30ms, QPS: 0.64</p>
+<p>2. **Aurora PostgreSQL Serverless v2** - P50: 744.00ms, P95: 1912.92ms, QPS: 0.94</p>
+<h3>核心发现</h3>
+<li>**P50延迟**: Aurora 快 53.1%</li>
+<li>**P95延迟**: Aurora 快 22.3%</li>
+<li>**成本**: Aurora PostgreSQL 节省约 **93%** (~$656/月)</li>
+<li>**推荐**: 默认选择 **Aurora PostgreSQL**，除非对P95/P99延迟要求极高</li>
+</div>
+<h2>🖥️ 测试环境</h2>
+<table>
+<tr><td><strong>**测试区域**</strong></td><td>AWS us-east-1, 阿里云 cn-beijing, 火山引擎 cn-beijing</td></tr>
+<tr><td><strong>**嵌入模型**</strong></td><td>Amazon Titan Text Embeddings v2 (1024维)</td></tr>
+<tr><td><strong>**测试框架**</strong></td><td>Cloud Memory Test Framework v1.0</td></tr>
+<tr><td><strong>**测试时间**</strong></td><td>2026-01-31 20:29:27</td></tr>
+</table>
+<h2>📊 测试概览</h2>
+<ul>
+<li><strong>总测试数</strong>: 4</li>
+<li><strong>知识库测试</strong>: 4</li>
+<li><strong>记忆系统测试</strong>: 0</li>
+<li><strong>数据规模</strong>: tiny</li>
+<li><strong>测试适配器</strong>: VolcengineVikingDB, AWSBedrockKB-Aurora, AWSBedrockKB-OpenSearch, AlibabaBailian</li>
+</ul>
+<h2>⚙️ 测试配置</h2>
+<ul>
+<li><strong>运行模式</strong>: cloud</li>
+<li><strong>数据规模</strong>: tiny</li>
+<li><strong>查询类型</strong>: default</li>
+<li>**文档数量**: 10 (已预先入库)</li>
+<li>**查询数量**: 5</li>
+<li>**数据类型**: 小学考试题目</li>
+<li>**测试方式**: 直接查询（跳过文档上传）</li>
+</ul>
+<h2>📋 知识库测试结果</h2>
+<h2>知识库测试结果</h2><table><tr><th>适配器</th><th>数据规模</th><th>P50延迟</th><th>P95延迟</th><th>QPS</th><th>P@1</th><th>MRR</th></tr><tr>
+                    <td>AWSBedrockKB-OpenSearch</td>
+                    <td>tiny</td>
+                    <td>1585.55ms</td>
+                    <td>2461.30ms</td>
+                    <td>0.6</td>
+                    <td>0.200</td>
+                    <td>0.350</td>
+                </tr><tr>
+                    <td>AWSBedrockKB-Aurora</td>
+                    <td>tiny</td>
+                    <td>744.00ms</td>
+                    <td>1912.92ms</td>
+                    <td>0.9</td>
+                    <td>0.000</td>
+                    <td>0.158</td>
+                </tr><tr>
+                    <td>VolcengineVikingDB</td>
+                    <td>tiny</td>
+                    <td>1461.52ms</td>
+                    <td>2094.69ms</td>
+                    <td>0.5</td>
+                    <td>0.200</td>
+                    <td>0.249</td>
+                </tr><tr>
+                    <td>AlibabaBailian</td>
+                    <td>tiny</td>
+                    <td>1398.12ms</td>
+                    <td>3008.62ms</td>
+                    <td>0.5</td>
+                    <td>0.400</td>
+                    <td>0.640</td>
+                </tr></table>
+<h2>📊 详细结果</h2>
+<h3>AWSBedrockKB-OpenSearch</h3>
+<div class="result-detail">
+<p><strong>类型</strong>: knowledge_base</p>
+<p><strong>数据规模</strong>: tiny</p>
+<p><strong>测试时间</strong>: 2026-01-31T20:28:44.250479</p>
+<h4>延迟指标</h4>
+<table>
+<tr><td>P50</td><td>1585.55ms</td></tr>
+<tr><td>P95</td><td>2461.30ms</td></tr>
+<tr><td>P99</td><td>2598.97ms</td></tr>
+<tr><td>平均</td><td>1500.33ms</td></tr>
+<tr><td>最小</td><td>637.88ms</td></tr>
+<tr><td>最大</td><td>2633.39ms</td></tr>
+</table>
+<h4>吞吐量指标</h4>
+<table>
+<tr><td>QPS</td><td>0.64</td></tr>
+<tr><td>总请求数</td><td>5</td></tr>
+<tr><td>成功请求</td><td>5</td></tr>
+<tr><td>失败请求</td><td>0</td></tr>
+<tr><td>错误率</td><td>0.00%</td></tr>
+</table>
+<h4>质量指标</h4>
+<table>
+<tr><td>Precision@1</td><td>0.2000</td></tr>
+<tr><td>Precision@5</td><td>0.2800</td></tr>
+<tr><td>Recall@10</td><td>1.0000</td></tr>
+<tr><td>MRR</td><td>0.3500</td></tr>
+<tr><td>NDCG@10</td><td>0.6758</td></tr>
+</table>
+</div>
+<h3>AWSBedrockKB-Aurora</h3>
+<div class="result-detail">
+<p><strong>类型</strong>: knowledge_base</p>
+<p><strong>数据规模</strong>: tiny</p>
+<p><strong>测试时间</strong>: 2026-01-31T20:28:53.234926</p>
+<h4>延迟指标</h4>
+<table>
+<tr><td>P50</td><td>744.00ms</td></tr>
+<tr><td>P95</td><td>1912.92ms</td></tr>
+<tr><td>P99</td><td>2110.47ms</td></tr>
+<tr><td>平均</td><td>1046.89ms</td></tr>
+<tr><td>最小</td><td>694.32ms</td></tr>
+<tr><td>最大</td><td>2159.86ms</td></tr>
+</table>
+<h4>吞吐量指标</h4>
+<table>
+<tr><td>QPS</td><td>0.94</td></tr>
+<tr><td>总请求数</td><td>5</td></tr>
+<tr><td>成功请求</td><td>5</td></tr>
+<tr><td>失败请求</td><td>0</td></tr>
+<tr><td>错误率</td><td>0.00%</td></tr>
+</table>
+<h4>质量指标</h4>
+<table>
+<tr><td>Precision@1</td><td>0.0000</td></tr>
+<tr><td>Precision@5</td><td>0.0800</td></tr>
+<tr><td>Recall@10</td><td>0.6800</td></tr>
+<tr><td>MRR</td><td>0.1583</td></tr>
+<tr><td>NDCG@10</td><td>0.2500</td></tr>
+</table>
+</div>
+<h3>VolcengineVikingDB</h3>
+<div class="result-detail">
+<p><strong>类型</strong>: knowledge_base</p>
+<p><strong>数据规模</strong>: tiny</p>
+<p><strong>测试时间</strong>: 2026-01-31T20:29:09.984277</p>
+<h4>延迟指标</h4>
+<table>
+<tr><td>P50</td><td>1461.52ms</td></tr>
+<tr><td>P95</td><td>2094.69ms</td></tr>
+<tr><td>P99</td><td>2140.12ms</td></tr>
+<tr><td>平均</td><td>1600.20ms</td></tr>
+<tr><td>最小</td><td>1234.13ms</td></tr>
+<tr><td>最大</td><td>2151.47ms</td></tr>
+</table>
+<h4>吞吐量指标</h4>
+<table>
+<tr><td>QPS</td><td>0.52</td></tr>
+<tr><td>总请求数</td><td>5</td></tr>
+<tr><td>成功请求</td><td>5</td></tr>
+<tr><td>失败请求</td><td>0</td></tr>
+<tr><td>错误率</td><td>0.00%</td></tr>
+</table>
+<h4>质量指标</h4>
+<table>
+<tr><td>Precision@1</td><td>0.2000</td></tr>
+<tr><td>Precision@5</td><td>0.0800</td></tr>
+<tr><td>Recall@10</td><td>0.4000</td></tr>
+<tr><td>MRR</td><td>0.2486</td></tr>
+<tr><td>NDCG@10</td><td>0.2613</td></tr>
+</table>
+</div>
+<h3>AlibabaBailian</h3>
+<div class="result-detail">
+<p><strong>类型</strong>: knowledge_base</p>
+<p><strong>数据规模</strong>: tiny</p>
+<p><strong>测试时间</strong>: 2026-01-31T20:29:27.447074</p>
+<h4>延迟指标</h4>
+<table>
+<tr><td>P50</td><td>1398.12ms</td></tr>
+<tr><td>P95</td><td>3008.62ms</td></tr>
+<tr><td>P99</td><td>3169.32ms</td></tr>
+<tr><td>平均</td><td>1842.73ms</td></tr>
+<tr><td>最小</td><td>1033.74ms</td></tr>
+<tr><td>最大</td><td>3209.49ms</td></tr>
+</table>
+<h4>吞吐量指标</h4>
+<table>
+<tr><td>QPS</td><td>0.53</td></tr>
+<tr><td>总请求数</td><td>5</td></tr>
+<tr><td>成功请求</td><td>5</td></tr>
+<tr><td>失败请求</td><td>0</td></tr>
+<tr><td>错误率</td><td>0.00%</td></tr>
+</table>
+<h4>质量指标</h4>
+<table>
+<tr><td>Precision@1</td><td>0.4000</td></tr>
+<tr><td>Precision@5</td><td>0.5600</td></tr>
+<tr><td>Recall@10</td><td>0.9333</td></tr>
+<tr><td>MRR</td><td>0.6400</td></tr>
+<tr><td>NDCG@10</td><td>0.7162</td></tr>
+</table>
+</div>
+<h2>📊 知识库综合对比分析</h2>
+<h3>🏆 综合评分对比</h3>
+<table>
+<tr><th>知识库</th><th>性能得分</th><th>质量得分</th><th>成本得分</th><th>易用性</th><th>综合评分</th><th>推荐场景</th></tr>
+<tr><td><strong>AWSBedrockKB-OpenSearch</strong></td><td>⭐</td><td>⭐</td><td>⭐⭐</td><td>⭐⭐⭐⭐⭐</td><td>⭐⭐</td><td>性能优先</td></tr>
+<tr><td><strong>AWSBedrockKB-Aurora</strong></td><td>⭐⭐⭐</td><td>⭐</td><td>⭐⭐⭐⭐⭐</td><td>⭐⭐⭐</td><td>⭐⭐⭐</td><td>成本优先</td></tr>
+<tr><td><strong>VolcengineVikingDB</strong></td><td>⭐⭐</td><td>⭐</td><td>⭐⭐⭐⭐</td><td>⭐⭐⭐</td><td>⭐⭐</td><td>国内应用</td></tr>
+<tr><td><strong>AlibabaBailian</strong></td><td>⭐⭐</td><td>⭐⭐</td><td>⭐⭐⭐⭐</td><td>⭐⭐⭐⭐</td><td>⭐⭐⭐</td><td>质量优先</td></tr>
+</table>
+<h3>🎯 检索质量深度分析</h3>
+<ol>
+<li>🥇 <strong>AlibabaBailian</strong> - MRR: 0.640, P@1: 0.400</li>
+<li>🥈 <strong>AWSBedrockKB-OpenSearch</strong> - MRR: 0.350, P@1: 0.200</li>
+<li>🥉 <strong>VolcengineVikingDB</strong> - MRR: 0.249, P@1: 0.200</li>
+<li> <strong>AWSBedrockKB-Aurora</strong> - MRR: 0.158, P@1: 0.000</li>
+</ol>
+<h3>🏗️ 架构特点对比</h3>
+<table>
+<tr><th>特性</th><th>AWS OpenSearch</th><th>AWS Aurora PG</th><th>火山引擎 VikingDB</th><th>阿里云百炼</th></tr>
+<tr><td><strong>底层技术</strong></td><td>OpenSearch + HNSW</td><td>PostgreSQL + pgvector</td><td>自研向量引擎</td><td>自研向量引擎</td></tr>
+<tr><td><strong>索引类型</strong></td><td>HNSW</td><td>IVFFlat/HNSW</td><td>HNSW + Hybrid</td><td>混合检索</td></tr>
+<tr><td><strong>SQL支持</strong></td><td>有限</td><td>✅ 完整</td><td>有限</td><td>有限</td></tr>
+<tr><td><strong>中文优化</strong></td><td>一般</td><td>一般</td><td>✅ 优化</td><td>✅ 深度优化</td></tr>
+<tr><td><strong>混合检索</strong></td><td>支持</td><td>需自实现</td><td>✅ 原生支持</td><td>✅ 原生支持</td></tr>
+<tr><td><strong>Rerank</strong></td><td>需自实现</td><td>需自实现</td><td>✅ 内置</td><td>✅ 内置</td></tr>
+</table>
+<h2>🔬 AWS Bedrock KB 存储后端深度对比</h2>
+<p>AWS Bedrock Knowledge Base支持多种向量存储后端，本次测试对比了两种主流方案：</p>
+<h3>性能指标详细对比</h3>
+<table>
+<tr><th>指标</th><th>OpenSearch Serverless</th><th>Aurora PostgreSQL</th><th>差异</th><th>赢家</th></tr>
+<tr><td><strong>P50 延迟</strong></td><td>1585.55ms</td><td>744.00ms</td><td>-53.1%</td><td>✅ Aurora</td></tr>
+<tr><td><strong>P95 延迟</strong></td><td>2461.30ms</td><td>1912.92ms</td><td>-22.3%</td><td>✅ Aurora</td></tr>
+<tr><td><strong>QPS</strong></td><td>0.64</td><td>0.94</td><td>+46.9%</td><td>✅ Aurora</td></tr>
+</table>
+<h3>关键发现</h3>
+<ol>
+<li><strong>中位数性能 (P50)</strong>: Aurora PostgreSQL 表现略好，差异 53.1%</li>
+<li><strong>尾部延迟 (P95/P99)</strong>: Aurora PostgreSQL 更稳定，P95差异 22.3%</li>
+<li><strong>吞吐量</strong>: 两者基本相当 (46.9% 差异)</li>
+<li><strong>成本</strong>: Aurora PostgreSQL 有压倒性优势（详见成本对比章节）</li>
+</ol>
+<h2>💰 成本对比与选型建议</h2>
+<h3>📉 月度成本估算（100文档规模）</h3>
+<table>
+<tr><th>服务</th><th>数据量</th><th>月度成本</th><th>成本构成</th></tr>
+<tr><td><strong>AWS Bedrock (OpenSearch)</strong></td><td>0.1GB</td><td>~$700/月</td><td>4 OCU × $0.24 × 730h</td></tr>
+<tr><td><strong>AWS Bedrock (Aurora PG)</strong></td><td>0.1GB</td><td>~$44/月</td><td>0.5 ACU × $0.12 × 730h</td></tr>
+<tr><td><strong>火山引擎 VikingDB</strong></td><td>0.1GB</td><td>~¥300/月</td><td>实例费 + 存储费</td></tr>
+<tr><td><strong>阿里云百炼</strong></td><td>0.1GB</td><td>~¥200/月</td><td>按调用次数计费</td></tr>
+</table>
+<h3>💡 成本节省分析</h3>
+<p>选择 <strong>Aurora PostgreSQL</strong> 相比 <strong>OpenSearch Serverless</strong>:</p>
+<ul>
+<li><strong>月度节省</strong>: $656/月</li>
+<li><strong>节省比例</strong>: 93.7%</li>
+<li><strong>年度节省</strong>: $7,872/年</li>
+</ul>
+<h3>🎯 选型建议</h3>
+<h4>默认推荐: <strong>Aurora PostgreSQL Serverless v2</strong> ⭐</h4>
+<p><strong>适用场景</strong>:</p>
+<ul>
+<li>✅ 成本敏感型项目</li>
+<li>✅ 需要完整SQL能力</li>
+<li>✅ 要求强一致性</li>
+<li>✅ 已有RDS基础设施</li>
+<li>✅ 低到中等查询量（&lt; 1000 QPS）</li>
+</ul>
+
+        <h2>📈 性能对比图表</h2>
+        <div class="chart-container"><div id="latency-chart"></div></div><script>Plotly.newPlot("latency-chart", {"data":[{"marker":{"color":"#3498db"},"name":"P50","x":["AWSBedrockKB-OpenSearch","AWSBedrockKB-Aurora","VolcengineVikingDB","AlibabaBailian"],"y":[1585.55,744.0,1461.52,1398.12],"type":"bar"},{"marker":{"color":"#e74c3c"},"name":"P95","x":["AWSBedrockKB-OpenSearch","AWSBedrockKB-Aurora","VolcengineVikingDB","AlibabaBailian"],"y":[2461.3,1912.92,2094.69,3008.62],"type":"bar"},{"marker":{"color":"#9b59b6"},"name":"P99","x":["AWSBedrockKB-OpenSearch","AWSBedrockKB-Aurora","VolcengineVikingDB","AlibabaBailian"],"y":[2598.97,2110.47,2140.12,3169.32],"type":"bar"}],"layout":{"template":{"data":{"histogram2dcontour":[{"type":"histogram2dcontour","colorbar":{"outlinewidth":0,"ticks":""},"colorscale":[[0.0,"#0d0887"],[0.1111111111111111,"#46039f"],[0.2222222222222222,"#7201a8"],[0.3333333333333333,"#9c179e"],[0.4444444444444444,"#bd3786"],[0.5555555555555556,"#d8576b"],[0.6666666666666666,"#ed7953"],[0.7777777777777778,"#fb9f3a"],[0.8888888888888888,"#fdca26"],[1.0,"#f0f921"]]}],"choropleth":[{"type":"choropleth","colorbar":{"outlinewidth":0,"ticks":""}}],"histogram2d":[{"type":"histogram2d","colorbar":{"outlinewidth":0,"ticks":""},"colorscale":[[0.0,"#0d0887"],[0.1111111111111111,"#46039f"],[0.2222222222222222,"#7201a8"],[0.3333333333333333,"#9c179e"],[0.4444444444444444,"#bd3786"],[0.5555555555555556,"#d8576b"],[0.6666666666666666,"#ed7953"],[0.7777777777777778,"#fb9f3a"],[0.8888888888888888,"#fdca26"],[1.0,"#f0f921"]]}],"heatmap":[{"type":"heatmap","colorbar":{"outlinewidth":0,"ticks":""},"colorscale":[[0.0,"#0d0887"],[0.1111111111111111,"#46039f"],[0.2222222222222222,"#7201a8"],[0.3333333333333333,"#9c179e"],[0.4444444444444444,"#bd3786"],[0.5555555555555556,"#d8576b"],[0.6666666666666666,"#ed7953"],[0.7777777777777778,"#fb9f3a"],[0.8888888888888888,"#fdca26"],[1.0,"#f0f921"]]}],"contourcarpet":[{"type":"contourcarpet","colorbar":{"outlinewidth":0,"ticks":""}}],"contour":[{"type":"contour","colorbar":{"outlinewidth":0,"ticks":""},"colorscale":[[0.0,"#0d0887"],[0.1111111111111111,"#46039f"],[0.2222222222222222,"#7201a8"],[0.3333333333333333,"#9c179e"],[0.4444444444444444,"#bd3786"],[0.5555555555555556,"#d8576b"],[0.6666666666666666,"#ed7953"],[0.7777777777777778,"#fb9f3a"],[0.8888888888888888,"#fdca26"],[1.0,"#f0f921"]]}],"surface":[{"type":"surface","colorbar":{"outlinewidth":0,"ticks":""},"colorscale":[[0.0,"#0d0887"],[0.1111111111111111,"#46039f"],[0.2222222222222222,"#7201a8"],[0.3333333333333333,"#9c179e"],[0.4444444444444444,"#bd3786"],[0.5555555555555556,"#d8576b"],[0.6666666666666666,"#ed7953"],[0.7777777777777778,"#fb9f3a"],[0.8888888888888888,"#fdca26"],[1.0,"#f0f921"]]}],"mesh3d":[{"type":"mesh3d","colorbar":{"outlinewidth":0,"ticks":""}}],"scatter":[{"fillpattern":{"fillmode":"overlay","size":10,"solidity":0.2},"type":"scatter"}],"parcoords":[{"type":"parcoords","line":{"colorbar":{"outlinewidth":0,"ticks":""}}}],"scatterpolargl":[{"type":"scatterpolargl","marker":{"colorbar":{"outlinewidth":0,"ticks":""}}}],"bar":[{"error_x":{"color":"#2a3f5f"},"error_y":{"color":"#2a3f5f"},"marker":{"line":{"color":"#E5ECF6","width":0.5},"pattern":{"fillmode":"overlay","size":10,"solidity":0.2}},"type":"bar"}],"scattergeo":[{"type":"scattergeo","marker":{"colorbar":{"outlinewidth":0,"ticks":""}}}],"scatterpolar":[{"type":"scatterpolar","marker":{"colorbar":{"outlinewidth":0,"ticks":""}}}],"histogram":[{"marker":{"pattern":{"fillmode":"overlay","size":10,"solidity":0.2}},"type":"histogram"}],"scattergl":[{"type":"scattergl","marker":{"colorbar":{"outlinewidth":0,"ticks":""}}}],"scatter3d":[{"type":"scatter3d","line":{"colorbar":{"outlinewidth":0,"ticks":""}},"marker":{"colorbar":{"outlinewidth":0,"ticks":""}}}],"scattermap":[{"type":"scattermap","marker":{"colorbar":{"outlinewidth":0,"ticks":""}}}],"scattermapbox":[{"type":"scattermapbox","marker":{"colorbar":{"outlinewidth":0,"ticks":""}}}],"scatterternary":[{"type":"scatterternary","marker":{"colorbar":{"outlinewidth":0,"ticks":""}}}],"scattercarpet":[{"type":"scattercarpet","marker":{"colorbar":{"outlinewidth":0,"ticks":""}}}],"carpet":[{"aaxis":{"endlinecolor":"#2a3f5f","gridcolor":"white","linecolor":"white","minorgridcolor":"white","startlinecolor":"#2a3f5f"},"baxis":{"endlinecolor":"#2a3f5f","gridcolor":"white","linecolor":"white","minorgridcolor":"white","startlinecolor":"#2a3f5f"},"type":"carpet"}],"table":[{"cells":{"fill":{"color":"#EBF0F8"},"line":{"color":"white"}},"header":{"fill":{"color":"#C8D4E3"},"line":{"color":"white"}},"type":"table"}],"barpolar":[{"marker":{"line":{"color":"#E5ECF6","width":0.5},"pattern":{"fillmode":"overlay","size":10,"solidity":0.2}},"type":"barpolar"}],"pie":[{"automargin":true,"type":"pie"}]},"layout":{"autotypenumbers":"strict","colorway":["#636efa","#EF553B","#00cc96","#ab63fa","#FFA15A","#19d3f3","#FF6692","#B6E880","#FF97FF","#FECB52"],"font":{"color":"#2a3f5f"},"hovermode":"closest","hoverlabel":{"align":"left"},"paper_bgcolor":"white","plot_bgcolor":"#E5ECF6","polar":{"bgcolor":"#E5ECF6","angularaxis":{"gridcolor":"white","linecolor":"white","ticks":""},"radialaxis":{"gridcolor":"white","linecolor":"white","ticks":""}},"ternary":{"bgcolor":"#E5ECF6","aaxis":{"gridcolor":"white","linecolor":"white","ticks":""},"baxis":{"gridcolor":"white","linecolor":"white","ticks":""},"caxis":{"gridcolor":"white","linecolor":"white","ticks":""}},"coloraxis":{"colorbar":{"outlinewidth":0,"ticks":""}},"colorscale":{"sequential":[[0.0,"#0d0887"],[0.1111111111111111,"#46039f"],[0.2222222222222222,"#7201a8"],[0.3333333333333333,"#9c179e"],[0.4444444444444444,"#bd3786"],[0.5555555555555556,"#d8576b"],[0.6666666666666666,"#ed7953"],[0.7777777777777778,"#fb9f3a"],[0.8888888888888888,"#fdca26"],[1.0,"#f0f921"]],"sequentialminus":[[0.0,"#0d0887"],[0.1111111111111111,"#46039f"],[0.2222222222222222,"#7201a8"],[0.3333333333333333,"#9c179e"],[0.4444444444444444,"#bd3786"],[0.5555555555555556,"#d8576b"],[0.6666666666666666,"#ed7953"],[0.7777777777777778,"#fb9f3a"],[0.8888888888888888,"#fdca26"],[1.0,"#f0f921"]],"diverging":[[0,"#8e0152"],[0.1,"#c51b7d"],[0.2,"#de77ae"],[0.3,"#f1b6da"],[0.4,"#fde0ef"],[0.5,"#f7f7f7"],[0.6,"#e6f5d0"],[0.7,"#b8e186"],[0.8,"#7fbc41"],[0.9,"#4d9221"],[1,"#276419"]]},"xaxis":{"gridcolor":"white","linecolor":"white","ticks":"","title":{"standoff":15},"zerolinecolor":"white","automargin":true,"zerolinewidth":2},"yaxis":{"gridcolor":"white","linecolor":"white","ticks":"","title":{"standoff":15},"zerolinecolor":"white","automargin":true,"zerolinewidth":2},"scene":{"xaxis":{"backgroundcolor":"#E5ECF6","gridcolor":"white","linecolor":"white","showbackground":true,"ticks":"","zerolinecolor":"white","gridwidth":2},"yaxis":{"backgroundcolor":"#E5ECF6","gridcolor":"white","linecolor":"white","showbackground":true,"ticks":"","zerolinecolor":"white","gridwidth":2},"zaxis":{"backgroundcolor":"#E5ECF6","gridcolor":"white","linecolor":"white","showbackground":true,"ticks":"","zerolinecolor":"white","gridwidth":2}},"shapedefaults":{"line":{"color":"#2a3f5f"}},"annotationdefaults":{"arrowcolor":"#2a3f5f","arrowhead":0,"arrowwidth":1},"geo":{"bgcolor":"white","landcolor":"#E5ECF6","subunitcolor":"white","showland":true,"showlakes":true,"lakecolor":"white"},"title":{"x":0.05},"mapbox":{"style":"light"}}},"legend":{"orientation":"h","yanchor":"bottom","y":1.02,"xanchor":"right","x":1},"title":{"text":"延迟对比 (ms)"},"barmode":"group","xaxis":{"title":{"text":"适配器"}},"yaxis":{"title":{"text":"延迟 (ms)"}}}});</script><div class="chart-container"><div id="throughput-chart"></div></div><script>Plotly.newPlot("throughput-chart", {"data":[{"marker":{"color":"#2ecc71"},"x":["AWSBedrockKB-OpenSearch","AWSBedrockKB-Aurora","VolcengineVikingDB","AlibabaBailian"],"y":[0.64,0.94,0.52,0.53],"type":"bar"}],"layout":{"template":{"data":{"histogram2dcontour":[{"type":"histogram2dcontour","colorbar":{"outlinewidth":0,"ticks":""},"colorscale":[[0.0,"#0d0887"],[0.1111111111111111,"#46039f"],[0.2222222222222222,"#7201a8"],[0.3333333333333333,"#9c179e"],[0.4444444444444444,"#bd3786"],[0.5555555555555556,"#d8576b"],[0.6666666666666666,"#ed7953"],[0.7777777777777778,"#fb9f3a"],[0.8888888888888888,"#fdca26"],[1.0,"#f0f921"]]}],"choropleth":[{"type":"choropleth","colorbar":{"outlinewidth":0,"ticks":""}}],"histogram2d":[{"type":"histogram2d","colorbar":{"outlinewidth":0,"ticks":""},"colorscale":[[0.0,"#0d0887"],[0.1111111111111111,"#46039f"],[0.2222222222222222,"#7201a8"],[0.3333333333333333,"#9c179e"],[0.4444444444444444,"#bd3786"],[0.5555555555555556,"#d8576b"],[0.6666666666666666,"#ed7953"],[0.7777777777777778,"#fb9f3a"],[0.8888888888888888,"#fdca26"],[1.0,"#f0f921"]]}],"heatmap":[{"type":"heatmap","colorbar":{"outlinewidth":0,"ticks":""},"colorscale":[[0.0,"#0d0887"],[0.1111111111111111,"#46039f"],[0.2222222222222222,"#7201a8"],[0.3333333333333333,"#9c179e"],[0.4444444444444444,"#bd3786"],[0.5555555555555556,"#d8576b"],[0.6666666666666666,"#ed7953"],[0.7777777777777778,"#fb9f3a"],[0.8888888888888888,"#fdca26"],[1.0,"#f0f921"]]}],"contourcarpet":[{"type":"contourcarpet","colorbar":{"outlinewidth":0,"ticks":""}}],"contour":[{"type":"contour","colorbar":{"outlinewidth":0,"ticks":""},"colorscale":[[0.0,"#0d0887"],[0.1111111111111111,"#46039f"],[0.2222222222222222,"#7201a8"],[0.3333333333333333,"#9c179e"],[0.4444444444444444,"#bd3786"],[0.5555555555555556,"#d8576b"],[0.6666666666666666,"#ed7953"],[0.7777777777777778,"#fb9f3a"],[0.8888888888888888,"#fdca26"],[1.0,"#f0f921"]]}],"surface":[{"type":"surface","colorbar":{"outlinewidth":0,"ticks":""},"colorscale":[[0.0,"#0d0887"],[0.1111111111111111,"#46039f"],[0.2222222222222222,"#7201a8"],[0.3333333333333333,"#9c179e"],[0.4444444444444444,"#bd3786"],[0.5555555555555556,"#d8576b"],[0.6666666666666666,"#ed7953"],[0.7777777777777778,"#fb9f3a"],[0.8888888888888888,"#fdca26"],[1.0,"#f0f921"]]}],"mesh3d":[{"type":"mesh3d","colorbar":{"outlinewidth":0,"ticks":""}}],"scatter":[{"fillpattern":{"fillmode":"overlay","size":10,"solidity":0.2},"type":"scatter"}],"parcoords":[{"type":"parcoords","line":{"colorbar":{"outlinewidth":0,"ticks":""}}}],"scatterpolargl":[{"type":"scatterpolargl","marker":{"colorbar":{"outlinewidth":0,"ticks":""}}}],"bar":[{"error_x":{"color":"#2a3f5f"},"error_y":{"color":"#2a3f5f"},"marker":{"line":{"color":"#E5ECF6","width":0.5},"pattern":{"fillmode":"overlay","size":10,"solidity":0.2}},"type":"bar"}],"scattergeo":[{"type":"scattergeo","marker":{"colorbar":{"outlinewidth":0,"ticks":""}}}],"scatterpolar":[{"type":"scatterpolar","marker":{"colorbar":{"outlinewidth":0,"ticks":""}}}],"histogram":[{"marker":{"pattern":{"fillmode":"overlay","size":10,"solidity":0.2}},"type":"histogram"}],"scattergl":[{"type":"scattergl","marker":{"colorbar":{"outlinewidth":0,"ticks":""}}}],"scatter3d":[{"type":"scatter3d","line":{"colorbar":{"outlinewidth":0,"ticks":""}},"marker":{"colorbar":{"outlinewidth":0,"ticks":""}}}],"scattermap":[{"type":"scattermap","marker":{"colorbar":{"outlinewidth":0,"ticks":""}}}],"scattermapbox":[{"type":"scattermapbox","marker":{"colorbar":{"outlinewidth":0,"ticks":""}}}],"scatterternary":[{"type":"scatterternary","marker":{"colorbar":{"outlinewidth":0,"ticks":""}}}],"scattercarpet":[{"type":"scattercarpet","marker":{"colorbar":{"outlinewidth":0,"ticks":""}}}],"carpet":[{"aaxis":{"endlinecolor":"#2a3f5f","gridcolor":"white","linecolor":"white","minorgridcolor":"white","startlinecolor":"#2a3f5f"},"baxis":{"endlinecolor":"#2a3f5f","gridcolor":"white","linecolor":"white","minorgridcolor":"white","startlinecolor":"#2a3f5f"},"type":"carpet"}],"table":[{"cells":{"fill":{"color":"#EBF0F8"},"line":{"color":"white"}},"header":{"fill":{"color":"#C8D4E3"},"line":{"color":"white"}},"type":"table"}],"barpolar":[{"marker":{"line":{"color":"#E5ECF6","width":0.5},"pattern":{"fillmode":"overlay","size":10,"solidity":0.2}},"type":"barpolar"}],"pie":[{"automargin":true,"type":"pie"}]},"layout":{"autotypenumbers":"strict","colorway":["#636efa","#EF553B","#00cc96","#ab63fa","#FFA15A","#19d3f3","#FF6692","#B6E880","#FF97FF","#FECB52"],"font":{"color":"#2a3f5f"},"hovermode":"closest","hoverlabel":{"align":"left"},"paper_bgcolor":"white","plot_bgcolor":"#E5ECF6","polar":{"bgcolor":"#E5ECF6","angularaxis":{"gridcolor":"white","linecolor":"white","ticks":""},"radialaxis":{"gridcolor":"white","linecolor":"white","ticks":""}},"ternary":{"bgcolor":"#E5ECF6","aaxis":{"gridcolor":"white","linecolor":"white","ticks":""},"baxis":{"gridcolor":"white","linecolor":"white","ticks":""},"caxis":{"gridcolor":"white","linecolor":"white","ticks":""}},"coloraxis":{"colorbar":{"outlinewidth":0,"ticks":""}},"colorscale":{"sequential":[[0.0,"#0d0887"],[0.1111111111111111,"#46039f"],[0.2222222222222222,"#7201a8"],[0.3333333333333333,"#9c179e"],[0.4444444444444444,"#bd3786"],[0.5555555555555556,"#d8576b"],[0.6666666666666666,"#ed7953"],[0.7777777777777778,"#fb9f3a"],[0.8888888888888888,"#fdca26"],[1.0,"#f0f921"]],"sequentialminus":[[0.0,"#0d0887"],[0.1111111111111111,"#46039f"],[0.2222222222222222,"#7201a8"],[0.3333333333333333,"#9c179e"],[0.4444444444444444,"#bd3786"],[0.5555555555555556,"#d8576b"],[0.6666666666666666,"#ed7953"],[0.7777777777777778,"#fb9f3a"],[0.8888888888888888,"#fdca26"],[1.0,"#f0f921"]],"diverging":[[0,"#8e0152"],[0.1,"#c51b7d"],[0.2,"#de77ae"],[0.3,"#f1b6da"],[0.4,"#fde0ef"],[0.5,"#f7f7f7"],[0.6,"#e6f5d0"],[0.7,"#b8e186"],[0.8,"#7fbc41"],[0.9,"#4d9221"],[1,"#276419"]]},"xaxis":{"gridcolor":"white","linecolor":"white","ticks":"","title":{"standoff":15},"zerolinecolor":"white","automargin":true,"zerolinewidth":2},"yaxis":{"gridcolor":"white","linecolor":"white","ticks":"","title":{"standoff":15},"zerolinecolor":"white","automargin":true,"zerolinewidth":2},"scene":{"xaxis":{"backgroundcolor":"#E5ECF6","gridcolor":"white","linecolor":"white","showbackground":true,"ticks":"","zerolinecolor":"white","gridwidth":2},"yaxis":{"backgroundcolor":"#E5ECF6","gridcolor":"white","linecolor":"white","showbackground":true,"ticks":"","zerolinecolor":"white","gridwidth":2},"zaxis":{"backgroundcolor":"#E5ECF6","gridcolor":"white","linecolor":"white","showbackground":true,"ticks":"","zerolinecolor":"white","gridwidth":2}},"shapedefaults":{"line":{"color":"#2a3f5f"}},"annotationdefaults":{"arrowcolor":"#2a3f5f","arrowhead":0,"arrowwidth":1},"geo":{"bgcolor":"white","landcolor":"#E5ECF6","subunitcolor":"white","showland":true,"showlakes":true,"lakecolor":"white"},"title":{"x":0.05},"mapbox":{"style":"light"}}},"title":{"text":"吞吐量对比 (QPS)"},"xaxis":{"title":{"text":"适配器"}},"yaxis":{"title":{"text":"QPS"}}}});</script><div class="chart-container"><div id="quality-chart"></div></div><script>Plotly.newPlot("quality-chart", {"data":[{"marker":{"color":"#1abc9c"},"name":"Precision@1","x":["AWSBedrockKB-OpenSearch","AWSBedrockKB-Aurora","VolcengineVikingDB","AlibabaBailian"],"y":[0.2,0.0,0.2,0.4],"type":"bar"},{"marker":{"color":"#f39c12"},"name":"MRR","x":["AWSBedrockKB-OpenSearch","AWSBedrockKB-Aurora","VolcengineVikingDB","AlibabaBailian"],"y":[0.35,0.1583,0.2486,0.64],"type":"bar"},{"marker":{"color":"#e74c3c"},"name":"NDCG@10","x":["AWSBedrockKB-OpenSearch","AWSBedrockKB-Aurora","VolcengineVikingDB","AlibabaBailian"],"y":[0.6758,0.25,0.2613,0.7162],"type":"bar"}],"layout":{"template":{"data":{"histogram2dcontour":[{"type":"histogram2dcontour","colorbar":{"outlinewidth":0,"ticks":""},"colorscale":[[0.0,"#0d0887"],[0.1111111111111111,"#46039f"],[0.2222222222222222,"#7201a8"],[0.3333333333333333,"#9c179e"],[0.4444444444444444,"#bd3786"],[0.5555555555555556,"#d8576b"],[0.6666666666666666,"#ed7953"],[0.7777777777777778,"#fb9f3a"],[0.8888888888888888,"#fdca26"],[1.0,"#f0f921"]]}],"choropleth":[{"type":"choropleth","colorbar":{"outlinewidth":0,"ticks":""}}],"histogram2d":[{"type":"histogram2d","colorbar":{"outlinewidth":0,"ticks":""},"colorscale":[[0.0,"#0d0887"],[0.1111111111111111,"#46039f"],[0.2222222222222222,"#7201a8"],[0.3333333333333333,"#9c179e"],[0.4444444444444444,"#bd3786"],[0.5555555555555556,"#d8576b"],[0.6666666666666666,"#ed7953"],[0.7777777777777778,"#fb9f3a"],[0.8888888888888888,"#fdca26"],[1.0,"#f0f921"]]}],"heatmap":[{"type":"heatmap","colorbar":{"outlinewidth":0,"ticks":""},"colorscale":[[0.0,"#0d0887"],[0.1111111111111111,"#46039f"],[0.2222222222222222,"#7201a8"],[0.3333333333333333,"#9c179e"],[0.4444444444444444,"#bd3786"],[0.5555555555555556,"#d8576b"],[0.6666666666666666,"#ed7953"],[0.7777777777777778,"#fb9f3a"],[0.8888888888888888,"#fdca26"],[1.0,"#f0f921"]]}],"contourcarpet":[{"type":"contourcarpet","colorbar":{"outlinewidth":0,"ticks":""}}],"contour":[{"type":"contour","colorbar":{"outlinewidth":0,"ticks":""},"colorscale":[[0.0,"#0d0887"],[0.1111111111111111,"#46039f"],[0.2222222222222222,"#7201a8"],[0.3333333333333333,"#9c179e"],[0.4444444444444444,"#bd3786"],[0.5555555555555556,"#d8576b"],[0.6666666666666666,"#ed7953"],[0.7777777777777778,"#fb9f3a"],[0.8888888888888888,"#fdca26"],[1.0,"#f0f921"]]}],"surface":[{"type":"surface","colorbar":{"outlinewidth":0,"ticks":""},"colorscale":[[0.0,"#0d0887"],[0.1111111111111111,"#46039f"],[0.2222222222222222,"#7201a8"],[0.3333333333333333,"#9c179e"],[0.4444444444444444,"#bd3786"],[0.5555555555555556,"#d8576b"],[0.6666666666666666,"#ed7953"],[0.7777777777777778,"#fb9f3a"],[0.8888888888888888,"#fdca26"],[1.0,"#f0f921"]]}],"mesh3d":[{"type":"mesh3d","colorbar":{"outlinewidth":0,"ticks":""}}],"scatter":[{"fillpattern":{"fillmode":"overlay","size":10,"solidity":0.2},"type":"scatter"}],"parcoords":[{"type":"parcoords","line":{"colorbar":{"outlinewidth":0,"ticks":""}}}],"scatterpolargl":[{"type":"scatterpolargl","marker":{"colorbar":{"outlinewidth":0,"ticks":""}}}],"bar":[{"error_x":{"color":"#2a3f5f"},"error_y":{"color":"#2a3f5f"},"marker":{"line":{"color":"#E5ECF6","width":0.5},"pattern":{"fillmode":"overlay","size":10,"solidity":0.2}},"type":"bar"}],"scattergeo":[{"type":"scattergeo","marker":{"colorbar":{"outlinewidth":0,"ticks":""}}}],"scatterpolar":[{"type":"scatterpolar","marker":{"colorbar":{"outlinewidth":0,"ticks":""}}}],"histogram":[{"marker":{"pattern":{"fillmode":"overlay","size":10,"solidity":0.2}},"type":"histogram"}],"scattergl":[{"type":"scattergl","marker":{"colorbar":{"outlinewidth":0,"ticks":""}}}],"scatter3d":[{"type":"scatter3d","line":{"colorbar":{"outlinewidth":0,"ticks":""}},"marker":{"colorbar":{"outlinewidth":0,"ticks":""}}}],"scattermap":[{"type":"scattermap","marker":{"colorbar":{"outlinewidth":0,"ticks":""}}}],"scattermapbox":[{"type":"scattermapbox","marker":{"colorbar":{"outlinewidth":0,"ticks":""}}}],"scatterternary":[{"type":"scatterternary","marker":{"colorbar":{"outlinewidth":0,"ticks":""}}}],"scattercarpet":[{"type":"scattercarpet","marker":{"colorbar":{"outlinewidth":0,"ticks":""}}}],"carpet":[{"aaxis":{"endlinecolor":"#2a3f5f","gridcolor":"white","linecolor":"white","minorgridcolor":"white","startlinecolor":"#2a3f5f"},"baxis":{"endlinecolor":"#2a3f5f","gridcolor":"white","linecolor":"white","minorgridcolor":"white","startlinecolor":"#2a3f5f"},"type":"carpet"}],"table":[{"cells":{"fill":{"color":"#EBF0F8"},"line":{"color":"white"}},"header":{"fill":{"color":"#C8D4E3"},"line":{"color":"white"}},"type":"table"}],"barpolar":[{"marker":{"line":{"color":"#E5ECF6","width":0.5},"pattern":{"fillmode":"overlay","size":10,"solidity":0.2}},"type":"barpolar"}],"pie":[{"automargin":true,"type":"pie"}]},"layout":{"autotypenumbers":"strict","colorway":["#636efa","#EF553B","#00cc96","#ab63fa","#FFA15A","#19d3f3","#FF6692","#B6E880","#FF97FF","#FECB52"],"font":{"color":"#2a3f5f"},"hovermode":"closest","hoverlabel":{"align":"left"},"paper_bgcolor":"white","plot_bgcolor":"#E5ECF6","polar":{"bgcolor":"#E5ECF6","angularaxis":{"gridcolor":"white","linecolor":"white","ticks":""},"radialaxis":{"gridcolor":"white","linecolor":"white","ticks":""}},"ternary":{"bgcolor":"#E5ECF6","aaxis":{"gridcolor":"white","linecolor":"white","ticks":""},"baxis":{"gridcolor":"white","linecolor":"white","ticks":""},"caxis":{"gridcolor":"white","linecolor":"white","ticks":""}},"coloraxis":{"colorbar":{"outlinewidth":0,"ticks":""}},"colorscale":{"sequential":[[0.0,"#0d0887"],[0.1111111111111111,"#46039f"],[0.2222222222222222,"#7201a8"],[0.3333333333333333,"#9c179e"],[0.4444444444444444,"#bd3786"],[0.5555555555555556,"#d8576b"],[0.6666666666666666,"#ed7953"],[0.7777777777777778,"#fb9f3a"],[0.8888888888888888,"#fdca26"],[1.0,"#f0f921"]],"sequentialminus":[[0.0,"#0d0887"],[0.1111111111111111,"#46039f"],[0.2222222222222222,"#7201a8"],[0.3333333333333333,"#9c179e"],[0.4444444444444444,"#bd3786"],[0.5555555555555556,"#d8576b"],[0.6666666666666666,"#ed7953"],[0.7777777777777778,"#fb9f3a"],[0.8888888888888888,"#fdca26"],[1.0,"#f0f921"]],"diverging":[[0,"#8e0152"],[0.1,"#c51b7d"],[0.2,"#de77ae"],[0.3,"#f1b6da"],[0.4,"#fde0ef"],[0.5,"#f7f7f7"],[0.6,"#e6f5d0"],[0.7,"#b8e186"],[0.8,"#7fbc41"],[0.9,"#4d9221"],[1,"#276419"]]},"xaxis":{"gridcolor":"white","linecolor":"white","ticks":"","title":{"standoff":15},"zerolinecolor":"white","automargin":true,"zerolinewidth":2},"yaxis":{"gridcolor":"white","linecolor":"white","ticks":"","title":{"standoff":15},"zerolinecolor":"white","automargin":true,"zerolinewidth":2},"scene":{"xaxis":{"backgroundcolor":"#E5ECF6","gridcolor":"white","linecolor":"white","showbackground":true,"ticks":"","zerolinecolor":"white","gridwidth":2},"yaxis":{"backgroundcolor":"#E5ECF6","gridcolor":"white","linecolor":"white","showbackground":true,"ticks":"","zerolinecolor":"white","gridwidth":2},"zaxis":{"backgroundcolor":"#E5ECF6","gridcolor":"white","linecolor":"white","showbackground":true,"ticks":"","zerolinecolor":"white","gridwidth":2}},"shapedefaults":{"line":{"color":"#2a3f5f"}},"annotationdefaults":{"arrowcolor":"#2a3f5f","arrowhead":0,"arrowwidth":1},"geo":{"bgcolor":"white","landcolor":"#E5ECF6","subunitcolor":"white","showland":true,"showlakes":true,"lakecolor":"white"},"title":{"x":0.05},"mapbox":{"style":"light"}}},"legend":{"orientation":"h","yanchor":"bottom","y":1.02,"xanchor":"right","x":1},"title":{"text":"检索质量对比"},"barmode":"group","xaxis":{"title":{"text":"适配器"}},"yaxis":{"title":{"text":"得分"}}}});</script>
+
+        <div class="footer">
+            本报告由云端知识库和记忆系统性能测试框架自动生成
+        </div>
+    </div>
+</body>
+</html>

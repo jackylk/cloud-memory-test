@@ -7,7 +7,25 @@
       "Bash(python -m src.main:*)",
       "Bash(python -m pytest:*)",
       "Bash(python3 -m pytest:*)",
-      "Bash(pip3 install:*)"
+      "Bash(pip3 install:*)",
+      "Bash(python3:*)",
+      "Bash(aws opensearchserverless list-access-policies:*)",
+      "Bash(aws sts get-caller-identity:*)",
+      "Bash(python -m src benchmark:*)",
+      "WebFetch(domain:www.volcengine.com)",
+      "WebFetch(domain:help.aliyun.com)",
+      "WebSearch",
+      "WebFetch(domain:docs.cloud.google.com)",
+      "WebFetch(domain:github.com)",
+      "Bash(if [ -f /Users/jacky/code/cloud-memory-test/.gitignore ])",
+      "Bash(then cat /Users/jacky/code/cloud-memory-test/.gitignore)",
+      "Bash(else echo \"No .gitignore file\")",
+      "Bash(fi)",
+      "Bash(pip3 search:*)",
+      "Bash(pip3 list:*)",
+      "Bash(aws s3 ls:*)",
+      "Bash(aws ec2 describe-vpcs:*)",
+      "Bash(aws ec2 create-vpc:*)"
     ]
   }
 }

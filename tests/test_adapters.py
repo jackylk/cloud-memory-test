@@ -5,7 +5,7 @@ import asyncio
 from datetime import datetime
 
 from src.adapters.base import Document, DocumentFormat, Memory
-from src.adapters.knowledge_base import SimpleVectorStore, MilvusAdapter, PineconeAdapter
+from src.adapters.knowledge_base import SimpleVectorStore, MilvusAdapter, PineconeAdapter, AWSBedrockKBAdapter
 from src.adapters.memory import Mem0LocalAdapter, MilvusMemoryAdapter
 
 
@@ -295,6 +295,130 @@ class TestPineconeAdapter:
         assert stats["initialized"]
         assert stats["mode"] == "mock"
         assert stats["document_count"] == 3
+
+        await adapter.cleanup()
+
+
+class TestAWSBedrockKBAdapter:
+    """AWS Bedrock KB 适配器测试 (Mock 模式)"""
+
+    @pytest.fixture
+    def adapter(self):
+        """创建测试适配器（Mock 模式）"""
+        return AWSBedrockKBAdapter({
+            "region": "us-east-1",
+            # 不设置 knowledge_base_id，自动启用 mock 模式
+        })
+
+    @pytest.fixture
+    def sample_documents(self):
+        """创建测试文档"""
+        return [
+            Document(
+                id="doc_001",
+                content="机器学习是人工智能的一个分支，它使计算机能够从数据中学习。",
+                format=DocumentFormat.TXT,
+                title="机器学习基础"
+            ),
+            Document(
+                id="doc_002",
+                content="深度学习是机器学习的子集，使用多层神经网络。",
+                format=DocumentFormat.TXT,
+                title="深度学习入门"
+            ),
+            Document(
+                id="doc_003",
+                content="自然语言处理让计算机理解人类语言。",
+                format=DocumentFormat.TXT,
+                title="NLP简介"
+            ),
+        ]
+
+    @pytest.mark.asyncio
+    async def test_initialize(self, adapter):
+        """测试初始化"""
+        assert adapter.mock_mode is True
+        await adapter.initialize()
+        assert adapter.is_initialized
+        await adapter.cleanup()
+
+    @pytest.mark.asyncio
+    async def test_upload_documents(self, adapter, sample_documents):
+        """测试文档上传"""
+        await adapter.initialize()
+
+        result = await adapter.upload_documents(sample_documents)
+
+        assert result.success_count == 3
+        assert result.failed_count == 0
+        assert result.details["mode"] == "mock"
+
+        await adapter.cleanup()
+
+    @pytest.mark.asyncio
+    async def test_build_index(self, adapter, sample_documents):
+        """测试构建索引"""
+        await adapter.initialize()
+        await adapter.upload_documents(sample_documents)
+
+        result = await adapter.build_index()
+
+        assert result.success
+        assert result.doc_count == 3
+        assert result.details["mode"] == "mock"
+
+        await adapter.cleanup()
+
+    @pytest.mark.asyncio
+    async def test_query(self, adapter, sample_documents):
+        """测试查询"""
+        await adapter.initialize()
+        await adapter.upload_documents(sample_documents)
+        await adapter.build_index()
+
+        result = await adapter.query("机器学习", top_k=3)
+
+        assert result.total_results > 0
+        assert result.latency_ms >= 0
+        assert len(result.scores) == len(result.documents)
+
+        await adapter.cleanup()
+
+    @pytest.mark.asyncio
+    async def test_delete_documents(self, adapter, sample_documents):
+        """测试删除文档"""
+        await adapter.initialize()
+        await adapter.upload_documents(sample_documents)
+
+        result = await adapter.delete_documents(["doc_001"])
+
+        assert result["success"]
+        assert result["deleted_count"] == 1
+
+        await adapter.cleanup()
+
+    @pytest.mark.asyncio
+    async def test_get_stats(self, adapter, sample_documents):
+        """测试获取统计信息"""
+        await adapter.initialize()
+        await adapter.upload_documents(sample_documents)
+
+        stats = await adapter.get_stats()
+
+        assert stats["initialized"]
+        assert stats["mode"] == "mock"
+        assert stats["document_count"] == 3
+
+        await adapter.cleanup()
+
+    @pytest.mark.asyncio
+    async def test_health_check(self, adapter):
+        """测试健康检查"""
+        await adapter.initialize()
+
+        is_healthy = await adapter.health_check()
+
+        assert is_healthy is True
 
         await adapter.cleanup()
 
