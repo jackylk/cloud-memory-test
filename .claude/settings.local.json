@@ -42,7 +42,9 @@
       "Bash(curl:*)",
       "Bash(lsof:*)",
       "Bash(xargs kill)",
-      "Bash(./prepare_deploy.sh:*)"
+      "Bash(./prepare_deploy.sh:*)",
+      "Bash(python -c:*)",
+      "Bash(git add:*)"
     ]
   }
 }

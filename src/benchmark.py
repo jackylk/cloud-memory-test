@@ -1137,6 +1137,291 @@ def cloud_resources(ctx, action, provider, resource_type, name, resource_id, con
     asyncio.run(run_action())
 
 
+@cli.command()
+@click.option("--type", "-t", "test_type", default="memory", type=click.Choice(["all", "kb", "memory"]),
+              help="测试类型: all(全部), kb(知识库), memory(记忆系统，默认)")
+@click.option("--scale", "-s", default="tiny", type=click.Choice(["tiny", "small", "medium"]),
+              help="数据规模（默认：tiny）")
+@click.option("--skip-local", is_flag=True, help="跳过本地适配器测试")
+@click.option("--report-dir", default="docs/test-reports", help="报告输出目录")
+@click.option("--commit-message", "-m", default=None, help="自定义提交信息")
+@click.option("--skip-git", is_flag=True, help="跳过git提交和推送")
+@click.option("--skip-push", is_flag=True, help="提交但不推送到远程")
+@click.pass_context
+def full_test(ctx, test_type, scale, skip_local, report_dir, commit_message, skip_git, skip_push):
+    """运行完整测试流程：测试→生成报告→同步web→git提交推送
+
+    这个命令会自动完成以下步骤：
+    1. 运行完整的性能测试
+    2. 生成Markdown和HTML测试报告
+    3. 同步报告到web/reports目录
+    4. Git提交所有更改
+    5. 推送到远程仓库
+
+    示例:
+      # 运行记忆系统测试并自动提交推送
+      python -m src full-test
+
+      # 运行所有测试（知识库+记忆系统）
+      python -m src full-test -t all -s tiny
+
+      # 只测试不提交
+      python -m src full-test --skip-git
+
+      # 提交但不推送
+      python -m src full-test --skip-push
+
+      # 自定义提交信息
+      python -m src full-test -m "更新测试报告：新增火山引擎测试结果"
+    """
+    import subprocess
+    import shutil
+
+    config: Config = ctx.obj["config"]
+
+    logger.info("=" * 80)
+    logger.info("完整测试流程")
+    logger.info("=" * 80)
+    logger.info(f"步骤1: 运行{test_type}测试（规模：{scale}）")
+    logger.info(f"步骤2: 生成测试报告")
+    logger.info(f"步骤3: 同步报告到web目录")
+    if not skip_git:
+        logger.info(f"步骤4: Git提交" + ("" if skip_push else "和推送"))
+    logger.info("=" * 80)
+    logger.info("")
+
+    # ============================================================
+    # 步骤1: 运行测试
+    # ============================================================
+    logger.info(">>> 步骤1: 运行测试 <<<")
+    logger.info("")
+
+    config_dict = config.model_dump()
+    config_dict["debug"] = {
+        "verbose": ctx.obj["verbose"],
+        "print_results": config.debug.print_results,
+        "save_raw_data": config.debug.save_raw_data,
+    }
+
+    runner = BenchmarkRunner(config_dict)
+
+    async def run_tests():
+        results = []
+
+        # 知识库测试
+        if test_type in ["all", "kb"]:
+            logger.info("开始知识库测试...")
+            kb_adapters = get_adapter_list(config, "knowledge_base")
+
+            for adapter in kb_adapters:
+                try:
+                    result = await runner.run_knowledge_base_benchmark(
+                        adapter,
+                        data_scale=scale,
+                        run_quality_test=True,
+                        skip_upload=True  # 已有文档，仅查询
+                    )
+                    results.append(result)
+                    logger.info(f"  ✓ {adapter.name} 完成")
+                except Exception as e:
+                    logger.error(f"  ✗ {adapter.name} 失败: {e}")
+
+        # 记忆系统测试
+        if test_type in ["all", "memory"]:
+            logger.info("开始记忆系统测试...")
+            memory_adapters = get_adapter_list(config, "memory")
+
+            # 根据参数过滤适配器
+            if skip_local:
+                memory_adapters = [a for a in memory_adapters if "Local" not in a.name]
+
+            for adapter in memory_adapters:
+                try:
+                    result = await runner.run_memory_benchmark(
+                        adapter,
+                        data_scale=scale
+                    )
+                    results.append(result)
+                    logger.info(f"  ✓ {adapter.name} 完成")
+                except Exception as e:
+                    logger.error(f"  ✗ {adapter.name} 失败: {e}")
+
+        return results
+
+    results = asyncio.run(run_tests())
+
+    if not results:
+        logger.error("测试失败，没有结果数据")
+        return
+
+    logger.info(f"✓ 测试完成，共 {len(results)} 个适配器")
+    logger.info("")
+
+    # ============================================================
+    # 步骤2: 生成测试报告
+    # ============================================================
+    logger.info(">>> 步骤2: 生成测试报告 <<<")
+    logger.info("")
+
+    from .report import ReportGenerator
+
+    test_config = {
+        "mode": config.mode,
+        "scale": scale,
+        "test_type": test_type,
+        "start_time": datetime.now().isoformat(),
+    }
+
+    generator = ReportGenerator()
+    report_path = Path(report_dir)
+    report_path.mkdir(parents=True, exist_ok=True)
+
+    generated_files = generator.generate_report(
+        results=[r.to_dict() for r in results],
+        config=test_config,
+        output_dir=report_dir,
+        formats=["markdown", "html"]
+    )
+
+    logger.info("✓ 报告生成完成:")
+    for fmt, path in generated_files.items():
+        logger.info(f"  {fmt}: {path}")
+    logger.info("")
+
+    # ============================================================
+    # 步骤3: 同步报告到web目录
+    # ============================================================
+    logger.info(">>> 步骤3: 同步报告到web目录 <<<")
+    logger.info("")
+
+    web_reports_dir = Path("web/reports")
+    web_reports_dir.mkdir(parents=True, exist_ok=True)
+
+    synced_files = []
+    for fmt, src_path in generated_files.items():
+        src = Path(src_path)
+        if src.exists():
+            dst = web_reports_dir / src.name
+            shutil.copy2(src, dst)
+            synced_files.append(dst)
+            logger.info(f"  ✓ {src.name} → web/reports/")
+
+    logger.info(f"✓ 同步完成，共 {len(synced_files)} 个文件")
+    logger.info("")
+
+    # ============================================================
+    # 步骤4: Git提交和推送
+    # ============================================================
+    if skip_git:
+        logger.info("⊘ 跳过Git操作")
+        logger.info("")
+        logger.info("=" * 80)
+        logger.info("✓ 完整测试流程完成！")
+        logger.info("=" * 80)
+        return
+
+    logger.info(">>> 步骤4: Git提交和推送 <<<")
+    logger.info("")
+
+    try:
+        # 检查git状态
+        status_result = subprocess.run(
+            ["git", "status", "--short"],
+            capture_output=True,
+            text=True,
+            check=True
+        )
+
+        if not status_result.stdout.strip():
+            logger.info("⊘ 没有需要提交的更改")
+        else:
+            logger.info("检测到以下更改:")
+            for line in status_result.stdout.strip().split('\n')[:10]:
+                logger.info(f"  {line}")
+            if len(status_result.stdout.strip().split('\n')) > 10:
+                logger.info(f"  ... 还有更多文件")
+            logger.info("")
+
+            # 添加测试报告文件
+            logger.info("添加文件到Git...")
+            subprocess.run(["git", "add", report_dir], check=True)
+            subprocess.run(["git", "add", "web/reports/"], check=True)
+            logger.info("  ✓ 文件已添加")
+            logger.info("")
+
+            # 生成提交信息
+            if not commit_message:
+                timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
+                test_type_name = {
+                    "all": "完整系统",
+                    "kb": "知识库",
+                    "memory": "记忆系统"
+                }.get(test_type, test_type)
+
+                adapter_names = [r.adapter_name for r in results[:3]]
+                adapter_summary = "、".join(adapter_names)
+                if len(results) > 3:
+                    adapter_summary += f"等{len(results)}个适配器"
+
+                commit_message = f"""添加{test_type_name}测试报告 ({timestamp})
+
+测试规模: {scale}
+测试适配器: {adapter_summary}
+测试结果: {len(results)}个适配器完成测试
+
+- 生成Markdown和HTML报告
+- 同步报告到web/reports目录
+
+Co-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>"""
+
+            # 提交
+            logger.info("创建Git提交...")
+            subprocess.run(
+                ["git", "commit", "-m", commit_message],
+                check=True
+            )
+            logger.info("  ✓ 提交成功")
+            logger.info("")
+
+            # 推送
+            if not skip_push:
+                logger.info("推送到远程仓库...")
+                subprocess.run(["git", "push"], check=True)
+                logger.info("  ✓ 推送成功")
+                logger.info("")
+            else:
+                logger.info("⊘ 跳过推送（使用 --skip-push）")
+                logger.info("  手动推送: git push")
+                logger.info("")
+
+    except subprocess.CalledProcessError as e:
+        logger.error(f"Git操作失败: {e}")
+        logger.error("请手动检查并提交")
+        logger.info("")
+    except Exception as e:
+        logger.error(f"发生错误: {e}")
+        logger.info("")
+
+    # ============================================================
+    # 完成
+    # ============================================================
+    logger.info("=" * 80)
+    logger.info("✓ 完整测试流程完成！")
+    logger.info("=" * 80)
+    logger.info("")
+    logger.info("生成的报告:")
+    for fmt, path in generated_files.items():
+        logger.info(f"  - {path}")
+    logger.info("")
+    logger.info("Web报告目录:")
+    logger.info(f"  - web/reports/ (已同步 {len(synced_files)} 个文件)")
+    logger.info("")
+
+    if not skip_git and not skip_push:
+        logger.info("✓ 更改已提交并推送到远程仓库")
+        logger.info("  Railway等部署服务会自动检测并部署更新")
+
+
 def main():
     """主入口"""
     cli(obj={})
