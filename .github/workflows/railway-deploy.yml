@@ -1,0 +1,33 @@
+name: Deploy to Railway
+
+on:
+  push:
+    branches:
+      - main
+      - master
+    paths:
+      - 'web/**'
+      - 'railway.toml'
+      - 'railway.json'
+      - '.github/workflows/railway-deploy.yml'
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Railway CLI
+        run: npm install -g @railway/cli
+
+      - name: Deploy to Railway
+        run: railway up --service web
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+
+      - name: Get deployment URL
+        run: |
+          echo "Deployment successful!"
+          echo "Check your Railway dashboard for the URL"
