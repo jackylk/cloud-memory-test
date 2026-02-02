@@ -1,15 +1,36 @@
+# Python
 __pycache__/
-*.pyc
-*.pyo
-*.pyd
-.Python
+*.py[cod]
+*$py.class
 *.so
+.Python
+env/
+venv/
+ENV/
 *.egg
 *.egg-info/
 dist/
 build/
-venv/
-env/
-.venv/
-.env
+
+# Flask
+instance/
+.webassets-cache
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
 .DS_Store
+Thumbs.db
+
+# Logs
+*.log
+/tmp/
+
+# 不要忽略 reports 目录（需要部署）
+!reports/
+!reports/*.html

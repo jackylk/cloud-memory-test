@@ -18,33 +18,31 @@
                 <div class="card">
                     <div class="card-icon">📚</div>
                     <h2>知识库测试报告</h2>
-                    <p class="count">共 {{ kb_count }} 份报告</p>
                     {% if latest_kb %}
                     <div class="latest">
                         <p><strong>最新报告:</strong></p>
                         <p class="time">{{ latest_kb.display_time }}</p>
-                        <a href="{{ url_for('view_report', filename=latest_kb.filename) }}" class="btn btn-primary">查看最新报告</a>
                     </div>
+                    <a href="{{ url_for('kb_reports') }}" class="btn btn-primary">查看测试报告</a>
                     {% else %}
                     <p class="no-data">暂无报告</p>
+                    <a href="{{ url_for('kb_reports') }}" class="btn btn-secondary" disabled>暂无报告</a>
                     {% endif %}
-                    <a href="{{ url_for('kb_reports') }}" class="btn btn-secondary">查看所有报告</a>
                 </div>
 
                 <div class="card">
                     <div class="card-icon">🧠</div>
                     <h2>记忆系统测试报告</h2>
-                    <p class="count">共 {{ memory_count }} 份报告</p>
                     {% if latest_memory %}
                     <div class="latest">
                         <p><strong>最新报告:</strong></p>
                         <p class="time">{{ latest_memory.display_time }}</p>
-                        <a href="{{ url_for('view_report', filename=latest_memory.filename) }}" class="btn btn-primary">查看最新报告</a>
                     </div>
+                    <a href="{{ url_for('memory_reports') }}" class="btn btn-primary">查看测试报告</a>
                     {% else %}
                     <p class="no-data">暂无报告</p>
+                    <a href="{{ url_for('memory_reports') }}" class="btn btn-secondary" disabled>暂无报告</a>
                     {% endif %}
-                    <a href="{{ url_for('memory_reports') }}" class="btn btn-secondary">查看所有报告</a>
                 </div>
             </div>
 

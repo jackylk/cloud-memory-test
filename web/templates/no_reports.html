@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>暂无报告 - 云端性能测试</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>{{ report_type }}测试报告</h1>
+            <p class="subtitle">
+                <a href="{{ url_for('index') }}" class="breadcrumb">← 返回首页</a>
+            </p>
+        </header>
+
+        <main>
+            <div class="no-reports">
+                <p>😔 暂无{{ report_type }}测试报告</p>
+                <p class="hint">运行测试后报告会自动生成</p>
+                <br>
+                <a href="{{ url_for('index') }}" class="btn btn-primary">返回首页</a>
+            </div>
+        </main>
+
+        <footer>
+            <p>云端记忆系统性能测试框架 | 自动生成测试报告</p>
+        </footer>
+    </div>
+</body>
+</html>

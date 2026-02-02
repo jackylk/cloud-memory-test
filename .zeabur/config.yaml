@@ -1,0 +1,8 @@
+# Zeabur 配置文件
+# 指定 web 服务的构建目录
+
+services:
+  - name: web
+    path: web
+    build:
+      dockerfile: Dockerfile

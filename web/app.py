@@ -7,8 +7,19 @@ from collections import defaultdict
 
 app = Flask(__name__)
 
-# 测试报告目录
-REPORTS_DIR = Path(__file__).parent.parent / "docs" / "test-reports"
+# 测试报告目录 - 支持本地开发和生产环境
+# 优先使用本地开发路径，如果不存在则使用部署路径
+_local_reports = Path(__file__).parent.parent / "docs" / "test-reports"
+_deploy_reports = Path(__file__).parent / "reports"
+
+if _local_reports.exists():
+    REPORTS_DIR = _local_reports
+elif _deploy_reports.exists():
+    REPORTS_DIR = _deploy_reports
+else:
+    # 如果都不存在，创建部署路径
+    _deploy_reports.mkdir(exist_ok=True)
+    REPORTS_DIR = _deploy_reports
 
 
 def get_reports():
@@ -75,16 +86,28 @@ def index():
 
 @app.route('/kb')
 def kb_reports():
-    """知识库报告列表"""
+    """重定向到最新的知识库报告"""
+    from flask import redirect, url_for
     kb_reports, _ = get_reports()
-    return render_template('kb_reports.html', reports=kb_reports)
+    if kb_reports:
+        # 直接跳转到最新报告
+        return redirect(url_for('view_report', filename=kb_reports[0]['filename']))
+    else:
+        # 没有报告时显示提示页面
+        return render_template('no_reports.html', report_type='知识库')
 
 
 @app.route('/memory')
 def memory_reports():
-    """记忆系统报告列表"""
+    """重定向到最新的记忆系统报告"""
+    from flask import redirect, url_for
     _, memory_reports = get_reports()
-    return render_template('memory_reports.html', reports=memory_reports)
+    if memory_reports:
+        # 直接跳转到最新报告
+        return redirect(url_for('view_report', filename=memory_reports[0]['filename']))
+    else:
+        # 没有报告时显示提示页面
+        return render_template('no_reports.html', report_type='记忆系统')
 
 
 @app.route('/report/<filename>')
