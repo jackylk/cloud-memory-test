@@ -48,11 +48,13 @@ class AlibabaBailianAdapter(KnowledgeBaseAdapter):
         self._endpoint = config.get("endpoint", "bailian.cn-beijing.aliyuncs.com")
         self._region = config.get("region", "cn-beijing")
 
-        # 检索配置
-        self._dense_similarity_top_k = config.get("dense_similarity_top_k", 100)
-        self._sparse_similarity_top_k = config.get("sparse_similarity_top_k", 100)
+        # 检索配置（优化：降低召回数量以减少延迟）
+        # 对于性能测试，使用较小的召回数量可以显著减少延迟
+        # 同时保持检索质量（因为最终只需要top 5-10个结果）
+        self._dense_similarity_top_k = config.get("dense_similarity_top_k", 20)
+        self._sparse_similarity_top_k = config.get("sparse_similarity_top_k", 20)
         self._enable_reranking = config.get("enable_reranking", True)
-        self._rerank_top_n = config.get("rerank_top_n", 5)
+        self._rerank_top_n = config.get("rerank_top_n", 10)
         self._rerank_min_score = config.get("rerank_min_score", 0.01)
 
         # 如果没有必要配置，启用 mock 模式
