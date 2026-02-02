@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>知识库测试报告 - 云端性能测试</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>📚 知识库测试报告</h1>
+            <p class="subtitle">
+                <a href="{{ url_for('index') }}" class="breadcrumb">← 返回首页</a>
+            </p>
+        </header>
+
+        <main>
+            {% if reports %}
+            <div class="report-list">
+                {% for report in reports %}
+                <div class="report-item">
+                    <div class="report-time">
+                        <div class="date">{{ report.time.strftime('%Y-%m-%d') }}</div>
+                        <div class="time">{{ report.time.strftime('%H:%M:%S') }}</div>
+                    </div>
+                    <div class="report-info">
+                        <h3>知识库性能测试报告</h3>
+                        <p class="report-meta">生成时间: {{ report.display_time }}</p>
+                    </div>
+                    <div class="report-actions">
+                        <a href="{{ url_for('view_report', filename=report.filename) }}" class="btn btn-primary">查看报告</a>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="no-reports">
+                <p>😔 暂无知识库测试报告</p>
+                <p class="hint">运行测试后报告会自动出现在这里</p>
+            </div>
+            {% endif %}
+        </main>
+
+        <footer>
+            <p>云端记忆系统性能测试框架 | 自动生成测试报告</p>
+        </footer>
+    </div>
+</body>
+</html>

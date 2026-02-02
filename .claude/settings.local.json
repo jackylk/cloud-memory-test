@@ -36,7 +36,9 @@
       "Bash(pip show:*)",
       "Bash(python /tmp/test_volcengine_veadk.py:*)",
       "Bash(python /tmp/test_aws_bedrock_memory.py:*)",
-      "Bash(tee:*)"
+      "Bash(tee:*)",
+      "Bash(timeout 3 python:*)",
+      "Bash(chmod:*)"
     ]
   }
 }

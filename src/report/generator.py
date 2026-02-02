@@ -2067,4 +2067,3 @@ class ReportGenerator:
 <li>选 <strong>阿里云百炼</strong>：阿里云生态、需要记忆关联能力。</li>
 <li>选 <strong>Mem0 本地</strong>：开发测试、数据自主、成本敏感。</li>
 </ul>"""
-

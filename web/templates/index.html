@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>云端记忆与知识库性能测试报告</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🚀 云端记忆与知识库性能测试</h1>
+            <p class="subtitle">对比评估多个云服务商的知识库和记忆系统性能</p>
+        </header>
+
+        <main>
+            <div class="cards">
+                <div class="card">
+                    <div class="card-icon">📚</div>
+                    <h2>知识库测试报告</h2>
+                    <p class="count">共 {{ kb_count }} 份报告</p>
+                    {% if latest_kb %}
+                    <div class="latest">
+                        <p><strong>最新报告:</strong></p>
+                        <p class="time">{{ latest_kb.display_time }}</p>
+                        <a href="{{ url_for('view_report', filename=latest_kb.filename) }}" class="btn btn-primary">查看最新报告</a>
+                    </div>
+                    {% else %}
+                    <p class="no-data">暂无报告</p>
+                    {% endif %}
+                    <a href="{{ url_for('kb_reports') }}" class="btn btn-secondary">查看所有报告</a>
+                </div>
+
+                <div class="card">
+                    <div class="card-icon">🧠</div>
+                    <h2>记忆系统测试报告</h2>
+                    <p class="count">共 {{ memory_count }} 份报告</p>
+                    {% if latest_memory %}
+                    <div class="latest">
+                        <p><strong>最新报告:</strong></p>
+                        <p class="time">{{ latest_memory.display_time }}</p>
+                        <a href="{{ url_for('view_report', filename=latest_memory.filename) }}" class="btn btn-primary">查看最新报告</a>
+                    </div>
+                    {% else %}
+                    <p class="no-data">暂无报告</p>
+                    {% endif %}
+                    <a href="{{ url_for('memory_reports') }}" class="btn btn-secondary">查看所有报告</a>
+                </div>
+            </div>
+
+            <section class="info">
+                <h3>📊 测试内容</h3>
+                <div class="info-grid">
+                    <div class="info-item">
+                        <h4>知识库系统</h4>
+                        <ul>
+                            <li>AWS Bedrock KB</li>
+                            <li>火山引擎 VikingDB</li>
+                            <li>阿里云百炼</li>
+                            <li>华为云 CSS</li>
+                            <li>本地 Milvus</li>
+                        </ul>
+                    </div>
+                    <div class="info-item">
+                        <h4>记忆系统</h4>
+                        <ul>
+                            <li>AWS Bedrock Memory</li>
+                            <li>火山引擎 AgentKit</li>
+                            <li>阿里云百炼长期记忆</li>
+                            <li>本地 Mem0</li>
+                        </ul>
+                    </div>
+                </div>
+            </section>
+
+            <section class="metrics">
+                <h3>📈 评估指标</h3>
+                <div class="metrics-grid">
+                    <div class="metric">
+                        <div class="metric-icon">⚡</div>
+                        <div class="metric-name">延迟性能</div>
+                        <div class="metric-desc">P50/P95/P99响应时间</div>
+                    </div>
+                    <div class="metric">
+                        <div class="metric-icon">🔄</div>
+                        <div class="metric-name">吞吐能力</div>
+                        <div class="metric-desc">QPS查询处理能力</div>
+                    </div>
+                    <div class="metric">
+                        <div class="metric-icon">✅</div>
+                        <div class="metric-name">可靠性</div>
+                        <div class="metric-desc">请求成功率</div>
+                    </div>
+                    <div class="metric">
+                        <div class="metric-icon">💰</div>
+                        <div class="metric-name">成本估算</div>
+                        <div class="metric-desc">月度使用成本</div>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <footer>
+            <p>云端记忆系统性能测试框架 | 自动生成测试报告</p>
+        </footer>
+    </div>
+</body>
+</html>
