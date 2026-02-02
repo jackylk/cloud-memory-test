@@ -53,7 +53,7 @@ zbpack.json
 
 # Scripts
 *.sh
-!web/run.sh
+!web/start.sh
 
 # Project specific
 src/
