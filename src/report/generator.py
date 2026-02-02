@@ -71,7 +71,7 @@ class ReportGenerator:
         # 生成知识库报告
         if kb_results:
             report_data = self._prepare_report_data(kb_results, config, "knowledge_base")
-            
+
             if "markdown" in formats:
                 md_path = output_path / f"kb_report_{timestamp}.md"
                 self._generate_markdown(report_data, md_path)
@@ -87,7 +87,7 @@ class ReportGenerator:
         # 生成记忆系统报告
         if memory_results:
             report_data = self._prepare_report_data(memory_results, config, "memory")
-            
+
             if "markdown" in formats:
                 md_path = output_path / f"memory_report_{timestamp}.md"
                 self._generate_markdown(report_data, md_path)
@@ -99,6 +99,9 @@ class ReportGenerator:
                 self._generate_html(report_data, html_path)
                 generated_files["memory_html"] = str(html_path)
                 logger.info(f"生成记忆系统 HTML 报告: {html_path}")
+
+        # 自动同步到 web/reports 目录（用于 Railway 部署）
+        self._sync_to_web_reports(generated_files)
 
         return generated_files
 
@@ -2067,3 +2070,40 @@ class ReportGenerator:
 <li>选 <strong>阿里云百炼</strong>：阿里云生态、需要记忆关联能力。</li>
 <li>选 <strong>Mem0 本地</strong>：开发测试、数据自主、成本敏感。</li>
 </ul>"""
+
+    def _sync_to_web_reports(self, generated_files: Dict[str, str]) -> None:
+        """同步报告到 web/reports 目录（用于 Railway 部署）
+
+        Args:
+            generated_files: 生成的文件路径字典
+        """
+        try:
+            import shutil
+
+            # 获取项目根目录的 web/reports 路径
+            current_file = Path(__file__)
+            project_root = current_file.parent.parent.parent
+            web_reports_dir = project_root / "web" / "reports"
+
+            # 如果 web/reports 目录不存在，创建它
+            if not web_reports_dir.exists():
+                web_reports_dir.mkdir(parents=True, exist_ok=True)
+                logger.debug(f"创建 web/reports 目录: {web_reports_dir}")
+
+            # 复制每个生成的文件到 web/reports
+            synced_count = 0
+            for file_type, file_path in generated_files.items():
+                source_file = Path(file_path)
+                if source_file.exists():
+                    dest_file = web_reports_dir / source_file.name
+                    shutil.copy2(source_file, dest_file)
+                    logger.debug(f"同步报告到 web: {source_file.name}")
+                    synced_count += 1
+
+            if synced_count > 0:
+                logger.info(f"✓ 已同步 {synced_count} 个报告文件到 web/reports 目录")
+                logger.info(f"  提示: 提交代码后 Railway 将显示最新报告")
+
+        except Exception as e:
+            logger.warning(f"同步报告到 web/reports 失败 (不影响报告生成): {e}")
+
