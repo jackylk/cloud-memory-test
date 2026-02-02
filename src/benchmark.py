@@ -151,18 +151,6 @@ def get_adapters(config: Config, adapter_type: str, adapter_names: list = None):
 
             all_adapters["AlibabaBailian"] = AlibabaBailianAdapter(aliyun_config)
 
-            # Google Dialogflow CX 适配器 - 已禁用
-            # from .adapters.knowledge_base.google_dialogflow_cx import GoogleDialogflowCXAdapter
-            #
-            # gcp_config = {
-            #     "project_id": getattr(config.gcp, 'project_id', None),
-            #     "location": config.gcp.location,
-            #     "agent_id": getattr(config.gcp, 'agent_id', None),
-            #     "data_store_id": getattr(config.gcp, 'data_store_id', None),
-            #     "credentials_path": getattr(config.gcp, 'service_account_json', None),
-            # }
-            # all_adapters["GoogleDialogflowCX"] = GoogleDialogflowCXAdapter(gcp_config)
-
             # 华为云 CSS 适配器 - 已暂时禁用
             # from .adapters.knowledge_base.huawei_css import HuaweiCSSAdapter
             #
@@ -184,7 +172,6 @@ def get_adapters(config: Config, adapter_type: str, adapter_names: list = None):
         elif adapter_type == "memory":
             # 云模式记忆适配器
             from .adapters.memory.aws_bedrock_memory import AWSBedrockMemoryAdapter
-            from .adapters.memory.google_vertex_memory import GoogleVertexMemoryAdapter
             from .adapters.memory.volcengine_agentkit_memory import VolcengineAgentKitMemoryAdapter
             from .adapters.memory.alibaba_bailian_memory import AlibabaBailianMemoryAdapter
 
@@ -208,15 +195,6 @@ def get_adapters(config: Config, adapter_type: str, adapter_names: list = None):
                 aws_mem_config["secret_access_key"] = config.aws.secret_access_key.get_secret_value()
 
             all_adapters["AWSBedrockMemory"] = AWSBedrockMemoryAdapter(aws_mem_config)
-
-            # Google Vertex AI Memory - 已禁用
-            # gcp_mem_config = {
-            #     "project_id": getattr(config.gcp, 'project_id', None),
-            #     "location": config.gcp.location,
-            #     "memory_bank_id": getattr(config.gcp, 'memory_bank_id', None),
-            #     "credentials_path": getattr(config.gcp, 'service_account_json', None),
-            # }
-            # all_adapters["GoogleVertexMemory"] = GoogleVertexMemoryAdapter(gcp_mem_config)
 
             # Volcengine AgentKit Memory (使用 VeADK + VikingDB)
             volcengine_mem_config = {

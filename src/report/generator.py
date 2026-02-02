@@ -226,39 +226,99 @@ class ReportGenerator:
         lines.extend(self._generate_test_methodology(data))
         lines.append("")
 
-        # 三、对比结果：时延、吞吐、检索质量、成本（表格）+ 综合对比
+        # 三、对比结果：按维度分组对比（P95为主）
         lines.append("## 三、对比结果")
         lines.append("")
         if kb_results:
-            lines.append("### 时延对比")
+            lines.append("### 🔍 分维度性能对比（基于P95）")
             lines.append("")
-            lines.append("| 知识库 | P50 (ms) | P95 (ms) | P99 (ms) | 平均 (ms) |")
-            lines.append("|--------|----------|----------|----------|-----------|")
-            for r in kb_results:
+
+            # 对比组1：端到端延迟P95
+            lines.append("#### 1️⃣ 端到端延迟P95对比（含网络）")
+            lines.append("")
+
+            # 按P95排序
+            sorted_by_p95 = sorted(kb_results, key=lambda r: r.get("latency", {}).get("p95_ms", 999999))
+
+            lines.append("| 排名 | 知识库 | P95延迟 (ms) | 与最优差距 |")
+            lines.append("|------|--------|--------------|-----------|")
+
+            best_p95 = sorted_by_p95[0].get("latency", {}).get("p95_ms", 0) if sorted_by_p95 else 0
+            for i, r in enumerate(sorted_by_p95, 1):
                 lat = r.get("latency", {})
                 name = r.get("adapter_name", "-")
-                lines.append(f"| {name} | {lat.get('p50_ms', 0):.2f} | {lat.get('p95_ms', 0):.2f} | {lat.get('p99_ms', 0):.2f} | {lat.get('mean_ms', 0):.2f} |")
+                p95 = lat.get("p95_ms", 0)
+                diff = p95 - best_p95
+                medal = "🥇" if i == 1 else "🥈" if i == 2 else "🥉" if i == 3 else f"{i}"
+                lines.append(f"| {medal} | {name} | {p95:.2f} | +{diff:.2f}ms |")
             lines.append("")
 
-            lines.append("### 吞吐对比")
+            # 对比组2：服务端处理时延P95（排除网络）
+            has_server_latency = any(r.get("details", {}).get("server_latency_estimate") for r in kb_results)
+            if has_server_latency:
+                lines.append("#### 2️⃣ 服务端处理时延P95对比（排除网络）")
+                lines.append("")
+
+                # 按服务端P95排序
+                kb_with_server = [r for r in kb_results if r.get("details", {}).get("server_latency_estimate")]
+                sorted_by_server_p95 = sorted(
+                    kb_with_server,
+                    key=lambda r: r.get("details", {}).get("server_latency_estimate", {}).get("p95", 999999)
+                )
+
+                lines.append("| 排名 | 知识库 | 网络基线P95 (ms) | 服务端P95 (ms) | 与最优差距 |")
+                lines.append("|------|--------|------------------|----------------|-----------|")
+
+                best_srv_p95 = sorted_by_server_p95[0].get("details", {}).get("server_latency_estimate", {}).get("p95", 0) if sorted_by_server_p95 else 0
+                for i, r in enumerate(sorted_by_server_p95, 1):
+                    name = r.get("adapter_name", "-")
+                    details = r.get("details", {})
+                    network = details.get("network_latency", {})
+                    server = details.get("server_latency_estimate", {})
+
+                    net_p95 = network.get("p95", 0)
+                    srv_p95 = server.get("p95", 0)
+                    diff = srv_p95 - best_srv_p95
+                    medal = "🥇" if i == 1 else "🥈" if i == 2 else "🥉" if i == 3 else f"{i}"
+                    lines.append(f"| {medal} | {name} | {net_p95:.2f} | {srv_p95:.2f} | +{diff:.2f}ms |")
+                lines.append("")
+                lines.append("*注：服务端时延 = 端到端延迟 - 网络基线延迟*")
+                lines.append("")
+
+            # 对比组3：吞吐量对比（QPS）
+            lines.append("#### 3️⃣ 吞吐量对比（QPS）")
             lines.append("")
-            lines.append("| 知识库 | QPS | 总请求数 | 成功率 |")
-            lines.append("|--------|-----|----------|--------|")
-            for r in kb_results:
+
+            sorted_by_qps = sorted(kb_results, key=lambda r: r.get("throughput", {}).get("qps", 0), reverse=True)
+
+            lines.append("| 排名 | 知识库 | QPS | 成功率 | 与最优差距 |")
+            lines.append("|------|--------|-----|--------|-----------|")
+
+            best_qps = sorted_by_qps[0].get("throughput", {}).get("qps", 0) if sorted_by_qps else 0
+            for i, r in enumerate(sorted_by_qps, 1):
                 tp = r.get("throughput", {})
                 name = r.get("adapter_name", "-")
+                qps = tp.get("qps", 0)
                 succ = 100 - tp.get("error_rate", 0) if tp else 100
-                lines.append(f"| {name} | {tp.get('qps', 0):.2f} | {tp.get('total_requests', 0)} | {succ:.1f}% |")
+                diff_pct = ((qps - best_qps) / best_qps * 100) if best_qps > 0 else 0
+                medal = "🥇" if i == 1 else "🥈" if i == 2 else "🥉" if i == 3 else f"{i}"
+                lines.append(f"| {medal} | {name} | {qps:.2f} | {succ:.1f}% | {diff_pct:.1f}% |")
             lines.append("")
 
-            lines.append("### 检索质量对比")
+            # 对比组4：检索质量对比
+            lines.append("#### 4️⃣ 检索质量对比")
             lines.append("")
-            lines.append("| 知识库 | Precision@1 | MRR | NDCG@10 |")
-            lines.append("|--------|-------------|-----|---------|")
-            for r in kb_results:
+
+            sorted_by_mrr = sorted(kb_results, key=lambda r: r.get("quality", {}).get("mrr", 0), reverse=True)
+
+            lines.append("| 排名 | 知识库 | MRR | Precision@1 | NDCG@10 |")
+            lines.append("|------|--------|-----|-------------|---------|")
+
+            for i, r in enumerate(sorted_by_mrr, 1):
                 qual = r.get("quality", {})
                 name = r.get("adapter_name", "-")
-                lines.append(f"| {name} | {qual.get('precision@1', 0):.3f} | {qual.get('mrr', 0):.3f} | {qual.get('ndcg@10', 0):.3f} |")
+                medal = "🥇" if i == 1 else "🥈" if i == 2 else "🥉" if i == 3 else f"{i}"
+                lines.append(f"| {medal} | {name} | {qual.get('mrr', 0):.3f} | {qual.get('precision@1', 0):.3f} | {qual.get('ndcg@10', 0):.3f} |")
             lines.append("")
 
             lines.append("### 成本对比（100 文档规模估算）")
@@ -317,27 +377,84 @@ class ReportGenerator:
         # 三、对比结果：时延、吞吐、成功率
         lines.append("## 三、对比结果")
         lines.append("")
+        # 三、对比结果：按维度分组对比（P95为主）
+        lines.append("## 三、对比结果")
+        lines.append("")
         if memory_results:
-            lines.append("### 时延对比")
+            lines.append("### 🔍 分维度性能对比（基于P95）")
             lines.append("")
-            lines.append("| 记忆系统 | 运行模式 | P50 (ms) | P95 (ms) | P99 (ms) | 平均 (ms) |")
-            lines.append("|----------|----------|----------|----------|----------|-----------|")
-            for r in memory_results:
+
+            # 对比组1：端到端延迟P95
+            lines.append("#### 1️⃣ 端到端延迟P95对比（含网络）")
+            lines.append("")
+
+            # 按P95排序
+            sorted_by_p95 = sorted(memory_results, key=lambda r: r.get("latency", {}).get("p95_ms", 999999))
+
+            lines.append("| 排名 | 记忆系统 | P95延迟 (ms) | 运行模式 | 与最优差距 |")
+            lines.append("|------|----------|--------------|----------|-----------|")
+
+            best_p95 = sorted_by_p95[0].get("latency", {}).get("p95_ms", 0) if sorted_by_p95 else 0
+            for i, r in enumerate(sorted_by_p95, 1):
                 lat = r.get("latency", {})
                 name = r.get("adapter_name", "-")
                 run_mode = r.get("details", {}).get("run_mode", "unknown")
-                lines.append(f"| {name} | {self._run_mode_label(run_mode)} | {lat.get('p50_ms', 0):.2f} | {lat.get('p95_ms', 0):.2f} | {lat.get('p99_ms', 0):.2f} | {lat.get('mean_ms', 0):.2f} |")
+                p95 = lat.get("p95_ms", 0)
+                diff = p95 - best_p95
+                medal = "🥇" if i == 1 else "🥈" if i == 2 else "🥉" if i == 3 else f"{i}"
+                lines.append(f"| {medal} | {name} | {p95:.2f} | {self._run_mode_label(run_mode)} | +{diff:.2f}ms |")
             lines.append("")
 
-            lines.append("### 吞吐对比")
+            # 对比组2：服务端处理时延P95（排除网络）
+            has_server_latency = any(r.get("details", {}).get("server_latency_estimate") for r in memory_results)
+            if has_server_latency:
+                lines.append("#### 2️⃣ 服务端处理时延P95对比（排除网络）")
+                lines.append("")
+
+                # 按服务端P95排序
+                memory_with_server = [r for r in memory_results if r.get("details", {}).get("server_latency_estimate")]
+                sorted_by_server_p95 = sorted(
+                    memory_with_server,
+                    key=lambda r: r.get("details", {}).get("server_latency_estimate", {}).get("p95", 999999)
+                )
+
+                lines.append("| 排名 | 记忆系统 | 网络基线P95 (ms) | 服务端P95 (ms) | 与最优差距 |")
+                lines.append("|------|----------|------------------|----------------|-----------|")
+
+                best_srv_p95 = sorted_by_server_p95[0].get("details", {}).get("server_latency_estimate", {}).get("p95", 0) if sorted_by_server_p95 else 0
+                for i, r in enumerate(sorted_by_server_p95, 1):
+                    name = r.get("adapter_name", "-")
+                    details = r.get("details", {})
+                    network = details.get("network_latency", {})
+                    server = details.get("server_latency_estimate", {})
+
+                    net_p95 = network.get("p95", 0)
+                    srv_p95 = server.get("p95", 0)
+                    diff = srv_p95 - best_srv_p95
+                    medal = "🥇" if i == 1 else "🥈" if i == 2 else "🥉" if i == 3 else f"{i}"
+                    lines.append(f"| {medal} | {name} | {net_p95:.2f} | {srv_p95:.2f} | +{diff:.2f}ms |")
+                lines.append("")
+                lines.append("*注：服务端时延 = 端到端延迟 - 网络基线延迟*")
+                lines.append("")
+
+            # 对比组3：吞吐量对比（QPS）
+            lines.append("#### 3️⃣ 吞吐量对比（QPS）")
             lines.append("")
-            lines.append("| 记忆系统 | QPS | 总请求数 | 成功率 |")
-            lines.append("|----------|-----|----------|--------|")
-            for r in memory_results:
+
+            sorted_by_qps = sorted(memory_results, key=lambda r: r.get("throughput", {}).get("qps", 0), reverse=True)
+
+            lines.append("| 排名 | 记忆系统 | QPS | 成功率 | 与最优差距 |")
+            lines.append("|------|----------|-----|--------|-----------|")
+
+            best_qps = sorted_by_qps[0].get("throughput", {}).get("qps", 0) if sorted_by_qps else 0
+            for i, r in enumerate(sorted_by_qps, 1):
                 tp = r.get("throughput", {})
                 name = r.get("adapter_name", "-")
+                qps = tp.get("qps", 0)
                 succ = 100 - tp.get("error_rate", 0) if tp else 100
-                lines.append(f"| {name} | {tp.get('qps', 0):.2f} | {tp.get('total_requests', 0)} | {succ:.1f}% |")
+                diff_pct = ((qps - best_qps) / best_qps * 100) if best_qps > 0 else 0
+                medal = "🥇" if i == 1 else "🥈" if i == 2 else "🥉" if i == 3 else f"{i}"
+                lines.append(f"| {medal} | {name} | {qps:.2f} | {succ:.1f}% | {diff_pct:.1f}% |")
             lines.append("")
 
             lines.append("### 成本对比（估算）")
@@ -1374,30 +1491,66 @@ class ReportGenerator:
         html = []
         chart_id_prefix = "kb-chart"
 
-        # 1. 时延对比图
+        # 1. P95延迟对比图（端到端 vs 服务端，分组展示）
         adapters = []
-        p50_values = []
-        p95_values = []
+        p95_end_to_end = []
+        p95_server_only = []
+        network_baseline = []
+
         for r in kb_results:
             if r.get("latency"):
                 adapters.append(r.get("adapter_name", "Unknown"))
                 lat = r["latency"]
-                p50_values.append(lat.get("p50_ms", 0))
-                p95_values.append(lat.get("p95_ms", 0))
+                p95_end_to_end.append(lat.get("p95_ms", 0))
+
+                # 获取服务端时延和网络基线
+                details = r.get("details", {})
+                server = details.get("server_latency_estimate", {})
+                network = details.get("network_latency", {})
+                p95_server_only.append(server.get("p95", 0) if server else lat.get("p95_ms", 0))
+                network_baseline.append(network.get("p95", 0) if network else 0)
+
         if adapters:
-            fig = go.Figure()
-            fig.add_trace(go.Bar(name='P50延迟', x=adapters, y=p50_values, marker_color='#3498db'))
-            fig.add_trace(go.Bar(name='P95延迟', x=adapters, y=p95_values, marker_color='#e74c3c'))
-            fig.update_layout(
-                title='时延对比 (ms)',
-                barmode='group',
-                xaxis_title='知识库',
-                yaxis_title='延迟 (ms)',
-                height=380,
-                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+            # 创建子图：2行1列
+            from plotly.subplots import make_subplots
+            fig = make_subplots(
+                rows=2, cols=1,
+                subplot_titles=('P95端到端延迟对比（含网络）', 'P95服务端处理时延对比（排除网络）'),
+                vertical_spacing=0.15,
+                specs=[[{"type": "bar"}], [{"type": "bar"}]]
             )
-            html.append(f'<div class="chart-container"><h4>时延对比</h4><div id="{chart_id_prefix}-latency"></div></div>')
-            html.append(f'<script>Plotly.newPlot("{chart_id_prefix}-latency", {fig.to_json()});</script>')
+
+            # 第1组：端到端P95
+            fig.add_trace(
+                go.Bar(name='端到端P95', x=adapters, y=p95_end_to_end,
+                       marker_color='#3498db', text=p95_end_to_end,
+                       texttemplate='%{text:.1f}ms', textposition='outside'),
+                row=1, col=1
+            )
+
+            # 第2组：服务端P95
+            fig.add_trace(
+                go.Bar(name='服务端P95', x=adapters, y=p95_server_only,
+                       marker_color='#1abc9c', text=p95_server_only,
+                       texttemplate='%{text:.1f}ms', textposition='outside',
+                       showlegend=True),
+                row=2, col=1
+            )
+
+            fig.update_xaxes(title_text="知识库", row=1, col=1)
+            fig.update_xaxes(title_text="知识库", row=2, col=1)
+            fig.update_yaxes(title_text="延迟 (ms)", row=1, col=1)
+            fig.update_yaxes(title_text="延迟 (ms)", row=2, col=1)
+
+            fig.update_layout(
+                height=700,
+                showlegend=False,
+                title_text="延迟对比（P95，分组展示）",
+                title_x=0.5
+            )
+
+            html.append(f'<div class="chart-container"><h4>P95延迟分组对比</h4><div id="{chart_id_prefix}-latency-grouped"></div></div>')
+            html.append(f'<script>Plotly.newPlot("{chart_id_prefix}-latency-grouped", {fig.to_json()});</script>')
 
         # 2. 吞吐对比图 (QPS)
         adapters = []
@@ -1995,34 +2148,66 @@ class ReportGenerator:
         html = []
         chart_id_prefix = "memory-chart"
 
-        # 1. 时延对比图
+        # 1. P95延迟对比图（端到端 vs 服务端，分组展示）
         adapters = []
-        p50_values = []
-        p95_values = []
-        p99_values = []
+        p95_end_to_end = []
+        p95_server_only = []
+        network_baseline = []
+
         for r in memory_results:
             if r.get("latency"):
                 adapters.append(r.get("adapter_name", "Unknown"))
                 lat = r["latency"]
-                p50_values.append(lat.get("p50_ms", 0))
-                p95_values.append(lat.get("p95_ms", 0))
-                p99_values.append(lat.get("p99_ms", 0))
-        
+                p95_end_to_end.append(lat.get("p95_ms", 0))
+
+                # 获取服务端时延和网络基线
+                details = r.get("details", {})
+                server = details.get("server_latency_estimate", {})
+                network = details.get("network_latency", {})
+                p95_server_only.append(server.get("p95", 0) if server else lat.get("p95_ms", 0))
+                network_baseline.append(network.get("p95", 0) if network else 0)
+
         if adapters:
-            fig = go.Figure()
-            fig.add_trace(go.Bar(name='P50延迟', x=adapters, y=p50_values, marker_color='#3498db'))
-            fig.add_trace(go.Bar(name='P95延迟', x=adapters, y=p95_values, marker_color='#e74c3c'))
-            fig.add_trace(go.Bar(name='P99延迟', x=adapters, y=p99_values, marker_color='#9b59b6'))
-            fig.update_layout(
-                title='时延对比 (ms)',
-                barmode='group',
-                xaxis_title='记忆系统',
-                yaxis_title='延迟 (ms)',
-                height=400,
-                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+            # 创建子图：2行1列
+            from plotly.subplots import make_subplots
+            fig = make_subplots(
+                rows=2, cols=1,
+                subplot_titles=('P95端到端延迟对比（含网络）', 'P95服务端处理时延对比（排除网络）'),
+                vertical_spacing=0.15,
+                specs=[[{"type": "bar"}], [{"type": "bar"}]]
             )
-            html.append(f'<div class="chart-container"><h4>时延对比</h4><div id="{chart_id_prefix}-latency"></div></div>')
-            html.append(f'<script>Plotly.newPlot("{chart_id_prefix}-latency", {fig.to_json()});</script>')
+
+            # 第1组：端到端P95
+            fig.add_trace(
+                go.Bar(name='端到端P95', x=adapters, y=p95_end_to_end,
+                       marker_color='#3498db', text=p95_end_to_end,
+                       texttemplate='%{text:.1f}ms', textposition='outside'),
+                row=1, col=1
+            )
+
+            # 第2组：服务端P95
+            fig.add_trace(
+                go.Bar(name='服务端P95', x=adapters, y=p95_server_only,
+                       marker_color='#1abc9c', text=p95_server_only,
+                       texttemplate='%{text:.1f}ms', textposition='outside',
+                       showlegend=True),
+                row=2, col=1
+            )
+
+            fig.update_xaxes(title_text="记忆系统", row=1, col=1)
+            fig.update_xaxes(title_text="记忆系统", row=2, col=1)
+            fig.update_yaxes(title_text="延迟 (ms)", row=1, col=1)
+            fig.update_yaxes(title_text="延迟 (ms)", row=2, col=1)
+
+            fig.update_layout(
+                height=700,
+                showlegend=False,
+                title_text="延迟对比（P95，分组展示）",
+                title_x=0.5
+            )
+
+            html.append(f'<div class="chart-container"><h4>P95延迟分组对比</h4><div id="{chart_id_prefix}-latency-grouped"></div></div>')
+            html.append(f'<script>Plotly.newPlot("{chart_id_prefix}-latency-grouped", {fig.to_json()});</script>')
 
         # 2. 吞吐对比图 (QPS)
         adapters = []

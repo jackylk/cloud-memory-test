@@ -44,7 +44,8 @@
       "Bash(xargs kill)",
       "Bash(./prepare_deploy.sh:*)",
       "Bash(python -c:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(python -m py_compile:*)"
     ]
   }
 }

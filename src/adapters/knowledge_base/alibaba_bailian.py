@@ -600,20 +600,107 @@ class AlibabaBailianAdapter(KnowledgeBaseAdapter):
             return True
         else:
             try:
-                # 尝试一个简单的查询来验证连接
+                # 使用最轻量级的查询来测试连接
                 from alibabacloud_bailian20231229 import models as bailian_20231229_models
+                from alibabacloud_tea_util import models as util_models
 
                 retrieve_request = bailian_20231229_models.RetrieveRequest(
-                    query="health check",
+                    query="test",  # 最短查询
                     index_id=self._index_id,
+                    dense_similarity_top_k=1,  # 最少召回
+                    sparse_similarity_top_k=1,
+                    enable_reranking=False,  # 关闭重排序以获得最小延迟
                     rerank_top_n=1
                 )
-                self._client.retrieve(
+
+                runtime = util_models.RuntimeOptions()
+                self._client.retrieve_with_options(
                     self._workspace_id,
-                    self._index_id,
-                    retrieve_request
+                    retrieve_request,
+                    {},
+                    runtime
                 )
                 return True
             except Exception as e:
                 logger.warning(f"健康检查失败: {e}")
                 return False
+
+    async def measure_network_latency(self, num_samples: int = 10) -> Dict[str, float]:
+        """测量网络基线延迟（重写基类方法）
+
+        使用 TCP 连接测试到阿里云 endpoint 的网络往返时间（RTT），
+        避免使用完整的 Retrieve API（包含服务端处理时间）。
+
+        Args:
+            num_samples: 采样次数，默认10次
+
+        Returns:
+            包含 min/max/avg/p50/p95 的延迟字典（单位：毫秒）
+        """
+        import socket
+        import statistics
+
+        if self._mock_mode:
+            # Mock 模式返回近似零的本地延迟
+            return {
+                "min": 0.1,
+                "max": 0.5,
+                "avg": 0.2,
+                "p50": 0.2,
+                "p95": 0.4,
+                "samples": num_samples,
+                "method": "mock"
+            }
+
+        # 解析 endpoint 获取主机和端口
+        host = self._endpoint
+        port = 443  # HTTPS 默认端口
+
+        latencies = []
+
+        for _ in range(num_samples):
+            try:
+                start = time.time()
+                # 创建 TCP 连接测试（仅测量网络延迟，不发送 HTTP 请求）
+                sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                sock.settimeout(5.0)  # 5秒超时
+                sock.connect((host, port))
+                sock.close()
+                elapsed_ms = (time.time() - start) * 1000
+                latencies.append(elapsed_ms)
+            except socket.timeout:
+                logger.warning(f"TCP 连接超时: {host}:{port}")
+            except socket.error as e:
+                logger.warning(f"TCP 连接失败: {host}:{port} - {e}")
+            except Exception as e:
+                logger.warning(f"网络延迟测量失败: {e}")
+
+        if not latencies:
+            logger.warning("所有网络延迟采样均失败，返回零值")
+            return {
+                "min": 0.0,
+                "max": 0.0,
+                "avg": 0.0,
+                "p50": 0.0,
+                "p95": 0.0,
+                "samples": 0,
+                "method": "tcp_connect_failed"
+            }
+
+        sorted_latencies = sorted(latencies)
+        p50_idx = int(len(sorted_latencies) * 0.5)
+        p95_idx = min(int(len(sorted_latencies) * 0.95), len(sorted_latencies) - 1)
+
+        result = {
+            "min": min(latencies),
+            "max": max(latencies),
+            "avg": statistics.mean(latencies),
+            "p50": sorted_latencies[p50_idx],
+            "p95": sorted_latencies[p95_idx],
+            "samples": len(latencies),
+            "method": "tcp_connect",
+            "endpoint": f"{host}:{port}"
+        }
+
+        logger.debug(f"阿里云百炼网络延迟测量完成: {result}")
+        return result
