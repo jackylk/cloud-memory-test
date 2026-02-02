@@ -537,10 +537,29 @@ class ReportGenerator:
             background: #d1ecf1;
             color: #0c5460;
         }}
+        .back-btn {{
+            display: inline-block;
+            padding: 10px 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            text-decoration: none;
+            border-radius: 6px;
+            font-weight: 500;
+            transition: all 0.3s;
+            margin-bottom: 20px;
+        }}
+        .back-btn:hover {{
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }}
+        .back-btn::before {{
+            content: "← ";
+        }}
     </style>
 </head>
 <body>
     <div class="container">
+        <a href="/" class="back-btn">返回首页</a>
         <h1>{data.title}</h1>
         <div class="meta">
             生成时间: {data.generated_at.strftime('%Y-%m-%d %H:%M:%S')} |
