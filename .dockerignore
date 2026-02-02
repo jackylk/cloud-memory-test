@@ -1,0 +1,61 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg
+*.egg-info/
+dist/
+build/
+venv/
+env/
+.venv/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# Docs
+*.md
+!README.md
+docs/
+
+# Config
+config/
+.env
+.env.*
+
+# Tests
+tests/
+test_*.py
+*_test.py
+
+# Logs
+*.log
+logs/
+
+# Zeabur specific
+.zeabur/
+zbpack.json
+
+# Scripts
+*.sh
+!web/run.sh
+
+# Project specific
+src/
+benchmarks/
+adapters/

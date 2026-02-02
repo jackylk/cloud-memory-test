@@ -1,20 +1,18 @@
-# 使用官方 Python 3.11 镜像（更稳定，避免编译问题）
+# 使用官方 Python 3.11 镜像
 FROM python:3.11-slim
 
 # 设置工作目录
 WORKDIR /app
 
 # 复制 web 目录的依赖文件并安装
-COPY requirements.txt .
+COPY web/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # 复制 web 应用代码
-COPY app.py .
-COPY templates ./templates
-COPY static ./static
-
-# 创建报告目录
-RUN mkdir -p reports
+COPY web/app.py .
+COPY web/templates ./templates
+COPY web/static ./static
+COPY web/reports ./reports
 
 # 暴露端口
 EXPOSE 5000

@@ -2,10 +2,10 @@
 # https://docs.railway.app/deploy/config-as-code
 
 [build]
-# 指定构建目录为 web 子目录
+# 指定使用 Dockerfile（项目根目录）
 builder = "DOCKERFILE"
-dockerfilePath = "web/Dockerfile"
-watchPatterns = ["web/**"]
+dockerfilePath = "Dockerfile"
+watchPatterns = ["web/**", "Dockerfile"]
 
 [deploy]
 # Railway 会自动设置 PORT 环境变量
