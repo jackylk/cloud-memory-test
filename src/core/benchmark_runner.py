@@ -96,6 +96,12 @@ class BenchmarkRunner:
                 for key, value in stats.items():
                     ctx.detail(f"{key}: {value}")
 
+                # 测量网络基线延迟（用于分离网络时延和服务端时延）
+                ctx.info("测量网络基线延迟...")
+                network_latency = await adapter.measure_network_latency(num_samples=10)
+                ctx.info(f"网络基线: P50={network_latency['p50']:.2f}ms, P95={network_latency['p95']:.2f}ms, Avg={network_latency['avg']:.2f}ms")
+                details["network_latency"] = network_latency
+
             # 步骤 2: 生成并上传文档（可选）
             # 跳过上传时不再生成文档，仅对已有知识库做查询；质量评估使用 test-data
             documents = []
@@ -160,8 +166,24 @@ class BenchmarkRunner:
                 latency_metrics = metrics.calculate_latency_metrics()
                 throughput_metrics = metrics.calculate_throughput_metrics()
 
-                ctx.info(f"延迟: {latency_metrics}")
+                ctx.info(f"端到端延迟: {latency_metrics}")
                 ctx.info(f"吞吐: {throughput_metrics}")
+
+                # 计算服务端时延（端到端延迟 - 网络基线）
+                if "network_latency" in details:
+                    network_baseline = details["network_latency"]["p50"]
+                    server_p50 = max(0, latency_metrics.p50 - network_baseline)
+                    server_p95 = max(0, latency_metrics.p95 - network_baseline)
+                    server_avg = max(0, latency_metrics.avg - network_baseline)
+
+                    ctx.info(f"网络基线: P50={network_baseline:.2f}ms")
+                    ctx.info(f"估算服务端时延: P50={server_p50:.2f}ms, P95={server_p95:.2f}ms, Avg={server_avg:.2f}ms")
+
+                    details["server_latency_estimate"] = {
+                        "p50": server_p50,
+                        "p95": server_p95,
+                        "avg": server_avg
+                    }
 
                 # 质量测试（可选）
                 quality_metrics = None
@@ -301,6 +323,12 @@ class BenchmarkRunner:
                 for key, value in stats.items():
                     ctx.detail(f"{key}: {value}")
 
+                # 测量网络基线延迟
+                ctx.info("测量网络基线延迟...")
+                network_latency = await adapter.measure_network_latency(num_samples=10)
+                ctx.info(f"网络基线: P50={network_latency['p50']:.2f}ms, P95={network_latency['p95']:.2f}ms, Avg={network_latency['avg']:.2f}ms")
+                details["network_latency"] = network_latency
+
             # 步骤 2: 生成并添加记忆
             with step_logger.step("生成并添加记忆") as ctx:
                 memories = self.data_generator.generate_memories(
@@ -355,15 +383,31 @@ class BenchmarkRunner:
 
                 # 写入延迟
                 add_latency = metrics.calculate_latency_metrics("latency_add_memory")
-                ctx.info(f"写入延迟: {add_latency}")
+                ctx.info(f"写入延迟(端到端): {add_latency}")
 
                 # 搜索延迟
                 search_latency = metrics.calculate_latency_metrics("latency_search_memory")
-                ctx.info(f"搜索延迟: {search_latency}")
+                ctx.info(f"搜索延迟(端到端): {search_latency}")
 
                 # 总体吞吐
                 throughput = metrics.calculate_throughput_metrics()
                 ctx.info(f"吞吐: {throughput}")
+
+                # 计算服务端时延（搜索延迟 - 网络基线）
+                if "network_latency" in details:
+                    network_baseline = details["network_latency"]["p50"]
+                    server_p50 = max(0, search_latency.p50 - network_baseline)
+                    server_p95 = max(0, search_latency.p95 - network_baseline)
+                    server_avg = max(0, search_latency.avg - network_baseline)
+
+                    ctx.info(f"网络基线: P50={network_baseline:.2f}ms")
+                    ctx.info(f"估算服务端时延: P50={server_p50:.2f}ms, P95={server_p95:.2f}ms, Avg={server_avg:.2f}ms")
+
+                    details["server_latency_estimate"] = {
+                        "p50": server_p50,
+                        "p95": server_p95,
+                        "avg": server_avg
+                    }
 
         except Exception as e:
             logger.error(f"测试过程中发生错误: {e}")
