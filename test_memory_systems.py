@@ -108,7 +108,7 @@ async def main():
         })),
         "volcengine": ("VolcengineAgentKitMemory", lambda: VolcengineAgentKitMemoryAdapter({
             "region": config.volcengine.region,
-            "agent_id": getattr(config.volcengine, 'agent_id', None),
+            "collection_name": getattr(config.volcengine, 'memory_collection_name', 'cloud_memory_test_ltm'),
             "access_key": config.volcengine.access_key.get_secret_value() if config.volcengine.access_key else None,
             "secret_key": config.volcengine.secret_key.get_secret_value() if config.volcengine.secret_key else None,
         })),

@@ -96,8 +96,7 @@ class VolcengineAgentKitMemoryAdapter(MemoryAdapter):
     async def add_memory(self, memory: Memory) -> MemoryAddResult:
         """添加记忆
 
-        注意: VeADK 的 LongTermMemory 需要通过 Session 来添加记忆
-        这里我们模拟添加单个记忆的行为
+        VeADK 通过 Session 添加记忆，我们将单个记忆转换为 Session 格式
         """
         start_time = time.time()
         memory_id = memory.id or str(uuid.uuid4())
@@ -114,26 +113,52 @@ class VolcengineAgentKitMemoryAdapter(MemoryAdapter):
             logger.debug(f"[Mock] 添加记忆: {memory_id} for user {memory.user_id}")
             return MemoryAddResult(memory_id=memory_id, success=True, latency_ms=elapsed_ms)
 
-        # 真实模式：VeADK 需要通过 Session 添加记忆
-        # 由于单个记忆添加不直接支持，我们返回成功但标记为 Mock
-        elapsed_ms = (time.time() - start_time) * 1000
-        logger.warning(
-            "VeADK LongTermMemory 需要通过 Session 添加记忆，"
-            "单个记忆添加功能暂时在 mock 模式运行"
-        )
+        # 真实模式：通过 Session 添加记忆到 VeADK
+        try:
+            from google.adk.sessions import Session
+            from google.adk.events import Event
+            from google.genai.types import Content, Part
 
-        # 暂存到本地，在 batch 操作时再同步
-        self._memories[memory_id] = memory
-        if memory.user_id not in self._user_memories:
-            self._user_memories[memory.user_id] = []
-        self._user_memories[memory.user_id].append(memory_id)
+            # 创建 Event（将记忆内容作为用户消息）
+            event = Event(
+                author="user",
+                content=Content(
+                    role="user",
+                    parts=[Part(text=memory.content)]
+                )
+            )
 
-        return MemoryAddResult(
-            memory_id=memory_id,
-            success=True,
-            latency_ms=elapsed_ms,
-            details={"note": "Stored locally, will sync in batch operations"}
-        )
+            # 创建 Session
+            session_id = f"memory_{memory_id}"
+            session = Session(
+                id=session_id,
+                app_name="benchmark_test",
+                user_id=memory.user_id,
+                events=[event]
+            )
+
+            # 添加到 VeADK
+            await self._ltm.add_session_to_memory(session)
+
+            # 同时存储到本地索引
+            self._memories[memory_id] = memory
+            if memory.user_id not in self._user_memories:
+                self._user_memories[memory.user_id] = []
+            self._user_memories[memory.user_id].append(memory_id)
+
+            elapsed_ms = (time.time() - start_time) * 1000
+            logger.debug(f"添加记忆到VeADK: {memory_id} for user {memory.user_id}")
+            return MemoryAddResult(memory_id=memory_id, success=True, latency_ms=elapsed_ms)
+
+        except Exception as e:
+            elapsed_ms = (time.time() - start_time) * 1000
+            logger.error(f"添加记忆失败: {e}")
+            return MemoryAddResult(
+                memory_id=memory_id,
+                success=False,
+                latency_ms=elapsed_ms,
+                details={"error": str(e)}
+            )
 
     async def add_memories_batch(self, memories: List[Memory]) -> List[MemoryAddResult]:
         """批量添加记忆"""
@@ -198,8 +223,17 @@ class VolcengineAgentKitMemoryAdapter(MemoryAdapter):
 
             if hasattr(response, 'memories'):
                 for mem_item in response.memories[:top_k]:
-                    # mem_item 是 SearchMemoryItem
-                    content = getattr(mem_item, 'content', '')
+                    # mem_item 是 SearchMemoryItem，包含 memory_info, score 等字段
+                    # memory_info 包含 summary 和 original_messages
+                    memory_info = getattr(mem_item, 'memory_info', {})
+
+                    # 优先使用 summary，如果没有则使用 original_messages
+                    if isinstance(memory_info, dict):
+                        content = memory_info.get('summary', '') or memory_info.get('original_messages', '')
+                    else:
+                        # 如果是对象，尝试访问属性
+                        content = getattr(memory_info, 'summary', '') or getattr(memory_info, 'original_messages', '')
+
                     score = getattr(mem_item, 'score', 0.0)
 
                     memory = Memory(

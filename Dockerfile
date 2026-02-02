@@ -24,5 +24,5 @@ EXPOSE 5000
 # 设置默认端口
 ENV PORT=5000
 
-# 启动命令
-CMD ["./start.sh"]
+# 启动命令（使用 shell 格式以确保脚本执行）
+CMD ["sh", "./start.sh"]
