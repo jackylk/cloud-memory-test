@@ -63,8 +63,9 @@ python -m src test-adapter kb      # 测试知识库适配器
 python -m src test-adapter memory  # 测试记忆适配器
 
 # 🚀 一站式完整测试流程（推荐）
-python -m src full-test                    # 运行记忆测试→生成报告→同步web→git提交推送
-python -m src full-test -t all             # 运行所有测试（知识库+记忆）
+python -m src full-test                    # 运行完整测试（知识库+记忆）→生成报告→同步web→git提交推送
+python -m src full-test -t memory          # 仅测试记忆系统
+python -m src full-test -t kb              # 仅测试知识库
 python -m src full-test --skip-git         # 只测试和生成报告，不提交
 python -m src full-test --skip-push        # 提交但不推送
 python -m src full-test -m "自定义提交信息" # 自定义提交信息

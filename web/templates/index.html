@@ -23,6 +23,15 @@
                         <p><strong>最新报告:</strong></p>
                         <p class="time">{{ latest_kb.display_time }}</p>
                     </div>
+                    {% if latest_kb.summary %}
+                    <div class="summary">
+                        <p class="summary-text">
+                            📊 测试了 {{ latest_kb.summary.adapters_count }} 个知识库系统，
+                            <strong>{{ latest_kb.summary.best_latency }}</strong> 延迟最低 ({{ latest_kb.summary.best_latency_value }})，
+                            <strong>{{ latest_kb.summary.best_qps }}</strong> 吞吐最高 ({{ latest_kb.summary.best_qps_value }} QPS)
+                        </p>
+                    </div>
+                    {% endif %}
                     <a href="{{ url_for('kb_reports') }}" class="btn btn-primary">查看测试报告</a>
                     {% else %}
                     <p class="no-data">暂无报告</p>
@@ -38,6 +47,15 @@
                         <p><strong>最新报告:</strong></p>
                         <p class="time">{{ latest_memory.display_time }}</p>
                     </div>
+                    {% if latest_memory.summary %}
+                    <div class="summary">
+                        <p class="summary-text">
+                            📊 测试了 {{ latest_memory.summary.adapters_count }} 个记忆系统，
+                            <strong>{{ latest_memory.summary.best_latency }}</strong> 延迟最低 ({{ latest_memory.summary.best_latency_value }})，
+                            <strong>{{ latest_memory.summary.best_qps }}</strong> 吞吐最高 ({{ latest_memory.summary.best_qps_value }} QPS)
+                        </p>
+                    </div>
+                    {% endif %}
                     <a href="{{ url_for('memory_reports') }}" class="btn btn-primary">查看测试报告</a>
                     {% else %}
                     <p class="no-data">暂无报告</p>

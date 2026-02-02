@@ -22,6 +22,54 @@ else:
     REPORTS_DIR = _deploy_reports
 
 
+def extract_summary_from_md(md_file):
+    """从Markdown报告中提取测试结论"""
+    try:
+        with open(md_file, 'r', encoding='utf-8') as f:
+            content = f.read()
+
+        # 查找综合对比表
+        lines = content.split('\n')
+        summary_data = []
+
+        # 查找表格数据
+        in_table = False
+        for i, line in enumerate(lines):
+            if '综合对比' in line or '| 适配器 | P50延迟 | P95延迟 | QPS | 成功率 |' in line:
+                in_table = True
+                continue
+
+            if in_table and line.startswith('|') and not line.startswith('|---'):
+                parts = [p.strip() for p in line.split('|')[1:-1]]
+                if len(parts) >= 5 and parts[0] and not parts[0].startswith('适配器'):
+                    summary_data.append({
+                        'name': parts[0],
+                        'p50': parts[1],
+                        'p95': parts[2],
+                        'qps': parts[3],
+                        'success_rate': parts[4]
+                    })
+            elif in_table and not line.strip():
+                break
+
+        # 找到最佳性能者
+        if summary_data:
+            best_latency = min(summary_data, key=lambda x: float(x['p50'].replace('ms', '')))
+            best_qps = max(summary_data, key=lambda x: float(x['qps']))
+
+            return {
+                'best_latency': best_latency['name'],
+                'best_latency_value': best_latency['p50'],
+                'best_qps': best_qps['name'],
+                'best_qps_value': best_qps['qps'],
+                'adapters_count': len(summary_data)
+            }
+    except Exception as e:
+        print(f"Error extracting summary: {e}")
+
+    return None
+
+
 def get_reports():
     """获取所有报告文件，按类型和时间分组"""
     kb_reports = []
@@ -68,6 +116,19 @@ def get_reports():
     # 按时间倒序排序（最新的在前）
     kb_reports.sort(key=lambda x: x["time"], reverse=True)
     memory_reports.sort(key=lambda x: x["time"], reverse=True)
+
+    # 为最新报告提取测试结论
+    if kb_reports:
+        md_filename = kb_reports[0]['filename'].replace('.html', '.md')
+        md_file = REPORTS_DIR / md_filename
+        if md_file.exists():
+            kb_reports[0]['summary'] = extract_summary_from_md(md_file)
+
+    if memory_reports:
+        md_filename = memory_reports[0]['filename'].replace('.html', '.md')
+        md_file = REPORTS_DIR / md_filename
+        if md_file.exists():
+            memory_reports[0]['summary'] = extract_summary_from_md(md_file)
 
     return kb_reports, memory_reports
 

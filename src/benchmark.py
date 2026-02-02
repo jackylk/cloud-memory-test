@@ -1138,8 +1138,8 @@ def cloud_resources(ctx, action, provider, resource_type, name, resource_id, con
 
 
 @cli.command()
-@click.option("--type", "-t", "test_type", default="memory", type=click.Choice(["all", "kb", "memory"]),
-              help="测试类型: all(全部), kb(知识库), memory(记忆系统，默认)")
+@click.option("--type", "-t", "test_type", default="all", type=click.Choice(["all", "kb", "memory"]),
+              help="测试类型: all(全部，默认), kb(知识库), memory(记忆系统)")
 @click.option("--scale", "-s", default="tiny", type=click.Choice(["tiny", "small", "medium"]),
               help="数据规模（默认：tiny）")
 @click.option("--skip-local", is_flag=True, help="跳过本地适配器测试")
@@ -1152,27 +1152,36 @@ def full_test(ctx, test_type, scale, skip_local, report_dir, commit_message, ski
     """运行完整测试流程：测试→生成报告→同步web→git提交推送
 
     这个命令会自动完成以下步骤：
-    1. 运行完整的性能测试
+    1. 运行完整的性能测试（默认：知识库+记忆系统）
     2. 生成Markdown和HTML测试报告
     3. 同步报告到web/reports目录
     4. Git提交所有更改
-    5. 推送到远程仓库
+    5. 推送到远程仓库（触发Railway等自动部署）
 
     示例:
-      # 运行记忆系统测试并自动提交推送
+      # 运行完整测试（知识库+记忆系统）并自动提交推送（推荐）
       python -m src full-test
 
-      # 运行所有测试（知识库+记忆系统）
-      python -m src full-test -t all -s tiny
+      # 仅测试记忆系统
+      python -m src full-test -t memory
 
-      # 只测试不提交
+      # 仅测试知识库
+      python -m src full-test -t kb
+
+      # 指定数据规模
+      python -m src full-test -s small
+
+      # 跳过本地适配器（只测云服务）
+      python -m src full-test --skip-local
+
+      # 只测试和生成报告，不提交
       python -m src full-test --skip-git
 
-      # 提交但不推送
+      # 提交但不推送（可先检查后手动推送）
       python -m src full-test --skip-push
 
       # 自定义提交信息
-      python -m src full-test -m "更新测试报告：新增火山引擎测试结果"
+      python -m src full-test -m "新增火山引擎和阿里云测试结果"
     """
     import subprocess
     import shutil
