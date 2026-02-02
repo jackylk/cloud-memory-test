@@ -1144,22 +1144,21 @@ def cloud_resources(ctx, action, provider, resource_type, name, resource_id, con
               help="数据规模（默认：tiny）")
 @click.option("--skip-local", is_flag=True, help="跳过本地适配器测试")
 @click.option("--report-dir", default="docs/test-reports", help="报告输出目录")
-@click.option("--commit-message", "-m", default=None, help="自定义提交信息")
-@click.option("--skip-git", is_flag=True, help="跳过git提交和推送")
-@click.option("--skip-push", is_flag=True, help="提交但不推送到远程")
+@click.option("--commit", is_flag=True, help="自动提交到Git（默认不提交）")
+@click.option("--commit-message", "-m", default=None, help="自定义提交信息（需要配合--commit使用）")
+@click.option("--push", is_flag=True, help="提交后推送到远程（需要配合--commit使用）")
 @click.pass_context
-def full_test(ctx, test_type, scale, skip_local, report_dir, commit_message, skip_git, skip_push):
-    """运行完整测试流程：测试→生成报告→同步web→git提交推送
+def full_test(ctx, test_type, scale, skip_local, report_dir, commit, commit_message, push):
+    """运行完整测试流程：测试→生成报告→同步web
 
     这个命令会自动完成以下步骤：
     1. 运行完整的性能测试（默认：知识库+记忆系统）
     2. 生成Markdown和HTML测试报告
     3. 同步报告到web/reports目录
-    4. Git提交所有更改
-    5. 推送到远程仓库（触发Railway等自动部署）
+    4. 可选：Git提交和推送（使用--commit和--push选项）
 
     示例:
-      # 运行完整测试（知识库+记忆系统）并自动提交推送（推荐）
+      # 运行完整测试（知识库+记忆系统，默认不提交）
       python -m src full-test
 
       # 仅测试记忆系统
@@ -1174,14 +1173,14 @@ def full_test(ctx, test_type, scale, skip_local, report_dir, commit_message, ski
       # 跳过本地适配器（只测云服务）
       python -m src full-test --skip-local
 
-      # 只测试和生成报告，不提交
-      python -m src full-test --skip-git
+      # 测试后自动提交（不推送）
+      python -m src full-test --commit
 
-      # 提交但不推送（可先检查后手动推送）
-      python -m src full-test --skip-push
+      # 测试后提交并推送到远程
+      python -m src full-test --commit --push
 
       # 自定义提交信息
-      python -m src full-test -m "新增火山引擎和阿里云测试结果"
+      python -m src full-test --commit --push -m "新增火山引擎和阿里云测试结果"
     """
     import subprocess
     import shutil
@@ -1194,8 +1193,8 @@ def full_test(ctx, test_type, scale, skip_local, report_dir, commit_message, ski
     logger.info(f"步骤1: 运行{test_type}测试（规模：{scale}）")
     logger.info(f"步骤2: 生成测试报告")
     logger.info(f"步骤3: 同步报告到web目录")
-    if not skip_git:
-        logger.info(f"步骤4: Git提交" + ("" if skip_push else "和推送"))
+    if commit:
+        logger.info(f"步骤4: Git提交" + ("和推送" if push else "（不推送）"))
     logger.info("=" * 80)
     logger.info("")
 
@@ -1319,14 +1318,19 @@ def full_test(ctx, test_type, scale, skip_local, report_dir, commit_message, ski
     logger.info("")
 
     # ============================================================
-    # 步骤4: Git提交和推送
+    # 步骤4: Git提交和推送（可选）
     # ============================================================
-    if skip_git:
-        logger.info("⊘ 跳过Git操作")
+    if not commit:
+        logger.info("⊘ 跳过Git操作（使用 --commit 选项可自动提交）")
         logger.info("")
         logger.info("=" * 80)
         logger.info("✓ 完整测试流程完成！")
         logger.info("=" * 80)
+        logger.info("")
+        logger.info("提示: 如需提交更改，请手动执行:")
+        logger.info("  git add docs/test-reports web/reports")
+        logger.info("  git commit -m '更新测试报告'")
+        logger.info("  git push")
         return
 
     logger.info(">>> 步骤4: Git提交和推送 <<<")
@@ -1393,13 +1397,13 @@ Co-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>"""
             logger.info("")
 
             # 推送
-            if not skip_push:
+            if push:
                 logger.info("推送到远程仓库...")
                 subprocess.run(["git", "push"], check=True)
                 logger.info("  ✓ 推送成功")
                 logger.info("")
             else:
-                logger.info("⊘ 跳过推送（使用 --skip-push）")
+                logger.info("⊘ 未推送到远程（使用 --push 选项可自动推送）")
                 logger.info("  手动推送: git push")
                 logger.info("")
 
@@ -1426,9 +1430,12 @@ Co-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>"""
     logger.info(f"  - web/reports/ (已同步 {len(synced_files)} 个文件)")
     logger.info("")
 
-    if not skip_git and not skip_push:
+    if commit and push:
         logger.info("✓ 更改已提交并推送到远程仓库")
         logger.info("  Railway等部署服务会自动检测并部署更新")
+    elif commit:
+        logger.info("✓ 更改已提交到本地仓库")
+        logger.info("  使用 git push 推送到远程")
 
 
 def main():

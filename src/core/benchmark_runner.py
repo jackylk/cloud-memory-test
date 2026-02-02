@@ -174,15 +174,15 @@ class BenchmarkRunner:
                     network_baseline = details["network_latency"]["p50"]
                     server_p50 = max(0, latency_metrics.p50 - network_baseline)
                     server_p95 = max(0, latency_metrics.p95 - network_baseline)
-                    server_avg = max(0, latency_metrics.avg - network_baseline)
+                    server_mean = max(0, latency_metrics.mean - network_baseline)
 
                     ctx.info(f"网络基线: P50={network_baseline:.2f}ms")
-                    ctx.info(f"估算服务端时延: P50={server_p50:.2f}ms, P95={server_p95:.2f}ms, Avg={server_avg:.2f}ms")
+                    ctx.info(f"估算服务端时延: P50={server_p50:.2f}ms, P95={server_p95:.2f}ms, Mean={server_mean:.2f}ms")
 
                     details["server_latency_estimate"] = {
                         "p50": server_p50,
                         "p95": server_p95,
-                        "avg": server_avg
+                        "mean": server_mean
                     }
 
                 # 质量测试（可选）
@@ -398,15 +398,15 @@ class BenchmarkRunner:
                     network_baseline = details["network_latency"]["p50"]
                     server_p50 = max(0, search_latency.p50 - network_baseline)
                     server_p95 = max(0, search_latency.p95 - network_baseline)
-                    server_avg = max(0, search_latency.avg - network_baseline)
+                    server_mean = max(0, search_latency.mean - network_baseline)
 
                     ctx.info(f"网络基线: P50={network_baseline:.2f}ms")
-                    ctx.info(f"估算服务端时延: P50={server_p50:.2f}ms, P95={server_p95:.2f}ms, Avg={server_avg:.2f}ms")
+                    ctx.info(f"估算服务端时延: P50={server_p50:.2f}ms, P95={server_p95:.2f}ms, Mean={server_mean:.2f}ms")
 
                     details["server_latency_estimate"] = {
                         "p50": server_p50,
                         "p95": server_p95,
-                        "avg": server_avg
+                        "mean": server_mean
                     }
 
         except Exception as e:
