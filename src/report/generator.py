@@ -128,9 +128,11 @@ class ReportGenerator:
             # 记忆系统：计算记忆条目数
             memory_count = 100  # 默认值
             user_count = 10  # 默认用户数
+            query_count = 5  # 默认查询数
             if results and results[0].get('details'):
                 memory_count = results[0]['details'].get('memory_count', 100)
                 user_count = results[0]['details'].get('user_count', 10)
+                query_count = results[0]['details'].get('query_count', 5)
             title = "云端记忆系统性能测试报告"
             doc_count = memory_count  # 用于统一接口
 
@@ -146,6 +148,7 @@ class ReportGenerator:
         if report_type == "memory":
             summary["memory_count"] = doc_count
             summary["user_count"] = user_count
+            summary["query_count"] = query_count
 
         # 结果汇总
         summary["results_summary"] = self._summarize_results(results)
@@ -1676,28 +1679,59 @@ class ReportGenerator:
         lines = []
         memory_count = data.summary.get("memory_count", 100)
         user_count = data.summary.get("user_count", 10)
-        
+        query_count = data.summary.get("query_count", 5)
+
         lines.append("### 测试数据")
         lines.append("")
         lines.append(f"- **记忆条目数**: {memory_count} 条")
         lines.append(f"- **模拟用户数**: {user_count} 个")
         lines.append(f"- **记忆类型**: 用户偏好、对话记录、学习进度等")
+        lines.append(f"- **测试查询数**: {query_count} 个查询语句")
         lines.append("")
-        
+
         lines.append("### 测试流程")
         lines.append("")
-        lines.append("1. **记忆添加**: 批量添加测试记忆数据")
-        lines.append("2. **记忆搜索**: 执行查询测试，评估检索性能")
-        lines.append("3. **性能指标**: 记录延迟、吞吐量、成功率")
+        lines.append("1. **初始化阶段**")
+        lines.append(f"   - 创建 {user_count} 个模拟用户账号")
+        lines.append(f"   - 为每个用户生成随机的记忆数据")
         lines.append("")
-        
+        lines.append("2. **记忆写入测试**")
+        lines.append(f"   - 批量添加 {memory_count} 条测试记忆")
+        lines.append(f"   - 记录每次写入操作的响应时间")
+        lines.append(f"   - 计算写入成功率")
+        lines.append("")
+        lines.append("3. **记忆搜索测试**")
+        lines.append(f"   - 执行 {query_count} 个不同的查询语句")
+        lines.append(f"   - 每个查询针对特定用户进行")
+        lines.append(f"   - 记录每次搜索的响应时间和返回结果数")
+        lines.append(f"   - 计算搜索成功率")
+        lines.append("")
+        lines.append("4. **性能指标收集**")
+        lines.append(f"   - 总请求数: {memory_count} (写入) + {query_count} (搜索) = {memory_count + query_count} 次")
+        lines.append(f"   - 统计所有操作的延迟分布 (P50/P95/P99)")
+        lines.append(f"   - 计算吞吐量 (QPS = 总请求数 / 总耗时)")
+        lines.append("")
+
         lines.append("### 评估维度")
         lines.append("")
-        lines.append("- **延迟**: P50/P95/P99 响应时间")
-        lines.append("- **吞吐**: QPS (Queries Per Second)")
-        lines.append("- **可靠性**: 请求成功率")
-        lines.append("- **成本**: 月度使用成本估算")
-        
+        lines.append("- **延迟 (Latency)**")
+        lines.append("  - P50: 50%的请求响应时间在此值以下（中位数）")
+        lines.append("  - P95: 95%的请求响应时间在此值以下")
+        lines.append("  - P99: 99%的请求响应时间在此值以下")
+        lines.append("  - 平均值: 所有请求的平均响应时间")
+        lines.append("")
+        lines.append("- **吞吐 (Throughput)**")
+        lines.append("  - QPS: 每秒完成的查询数 (Queries Per Second)")
+        lines.append(f"  - 总请求数: 包含写入和搜索的所有操作")
+        lines.append("")
+        lines.append("- **可靠性 (Reliability)**")
+        lines.append("  - 成功率: 成功完成的请求数 / 总请求数")
+        lines.append("  - 失败原因: API超时、限流、认证失败等")
+        lines.append("")
+        lines.append("- **成本 (Cost)**")
+        lines.append("  - 基于云服务商的计费模式估算月度成本")
+        lines.append("  - 考虑因素: API调用次数、存储容量、数据传输等")
+
         return lines
     
     def _generate_memory_cost_table(self, memory_results: List[Dict]) -> List[str]:
@@ -1865,27 +1899,76 @@ class ReportGenerator:
         """生成记忆系统测试方法的HTML"""
         memory_count = data.summary.get("memory_count", 100)
         user_count = data.summary.get("user_count", 10)
-        
+        query_count = data.summary.get("query_count", 5)
+
         return f"""<h3>测试数据</h3>
 <ul>
 <li><strong>记忆条目数</strong>：{memory_count} 条</li>
 <li><strong>模拟用户数</strong>：{user_count} 个</li>
 <li><strong>记忆类型</strong>：用户偏好、对话记录、学习进度等</li>
+<li><strong>测试查询数</strong>：{query_count} 个查询语句</li>
 </ul>
 
 <h3>测试流程</h3>
 <ol>
-<li><strong>记忆添加</strong>：批量添加测试记忆数据</li>
-<li><strong>记忆搜索</strong>：执行查询测试，评估检索性能</li>
-<li><strong>性能指标</strong>：记录延迟、吞吐量、成功率</li>
+<li><strong>初始化阶段</strong>
+  <ul>
+    <li>创建 {user_count} 个模拟用户账号</li>
+    <li>为每个用户生成随机的记忆数据</li>
+  </ul>
+</li>
+<li><strong>记忆写入测试</strong>
+  <ul>
+    <li>批量添加 {memory_count} 条测试记忆</li>
+    <li>记录每次写入操作的响应时间</li>
+    <li>计算写入成功率</li>
+  </ul>
+</li>
+<li><strong>记忆搜索测试</strong>
+  <ul>
+    <li>执行 {query_count} 个不同的查询语句</li>
+    <li>每个查询针对特定用户进行</li>
+    <li>记录每次搜索的响应时间和返回结果数</li>
+    <li>计算搜索成功率</li>
+  </ul>
+</li>
+<li><strong>性能指标收集</strong>
+  <ul>
+    <li>总请求数: {memory_count} (写入) + {query_count} (搜索) = {memory_count + query_count} 次</li>
+    <li>统计所有操作的延迟分布 (P50/P95/P99)</li>
+    <li>计算吞吐量 (QPS = 总请求数 / 总耗时)</li>
+  </ul>
+</li>
 </ol>
 
 <h3>评估维度</h3>
 <ul>
-<li><strong>延迟</strong>：P50/P95/P99 响应时间</li>
-<li><strong>吞吐</strong>：QPS (Queries Per Second)</li>
-<li><strong>可靠性</strong>：请求成功率</li>
-<li><strong>成本</strong>：月度使用成本估算</li>
+<li><strong>延迟 (Latency)</strong>
+  <ul>
+    <li>P50: 50%的请求响应时间在此值以下（中位数）</li>
+    <li>P95: 95%的请求响应时间在此值以下</li>
+    <li>P99: 99%的请求响应时间在此值以下</li>
+    <li>平均值: 所有请求的平均响应时间</li>
+  </ul>
+</li>
+<li><strong>吞吐 (Throughput)</strong>
+  <ul>
+    <li>QPS: 每秒完成的查询数 (Queries Per Second)</li>
+    <li>总请求数: 包含写入和搜索的所有操作</li>
+  </ul>
+</li>
+<li><strong>可靠性 (Reliability)</strong>
+  <ul>
+    <li>成功率: 成功完成的请求数 / 总请求数</li>
+    <li>失败原因: API超时、限流、认证失败等</li>
+  </ul>
+</li>
+<li><strong>成本 (Cost)</strong>
+  <ul>
+    <li>基于云服务商的计费模式估算月度成本</li>
+    <li>考虑因素: API调用次数、存储容量、数据传输等</li>
+  </ul>
+</li>
 </ul>"""
     
     def _generate_memory_performance_charts(self, memory_results: List[Dict]) -> str:
