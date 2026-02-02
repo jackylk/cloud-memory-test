@@ -97,13 +97,14 @@ class BenchmarkRunner:
                     ctx.detail(f"{key}: {value}")
 
             # 步骤 2: 生成并上传文档（可选）
-            # 生成文档用于质量评估（即使跳过上传）
-            documents = self.data_generator.generate_documents(doc_count)
+            # 跳过上传时不再生成文档，仅对已有知识库做查询；质量评估使用 test-data
+            documents = []
+            if not skip_upload:
+                documents = self.data_generator.generate_documents(doc_count)
 
             if skip_upload:
                 with step_logger.step("跳过文档上传") as ctx:
-                    ctx.info(f"文档已预先入库（{doc_count}个）")
-                    ctx.info(f"生成 {len(documents)} 个文档用于质量评估")
+                    ctx.info(f"文档已预先入库（{doc_count}个），仅执行查询与质量评估")
                     details["upload_time_ms"] = 0
                     details["upload_success"] = 0
                     details["upload_failed"] = 0
@@ -187,28 +188,24 @@ class BenchmarkRunner:
                     for query, truth in queries_with_truth:
                         result = await adapter.query(query, top_k=10)
 
-                        # 提取返回文档的ID/文件名
+                        # 提取返回文档的ID/文件名（用于与 ground truth 匹配）
                         pred_ids = []
                         for doc in result.documents:
                             doc_id = doc.get("id", "")
-                            # 确保doc_id是字符串类型（某些适配器可能返回整数ID）
                             doc_id = str(doc_id) if doc_id else ""
-                            # 从不同格式的ID中提取文件名
-                            # AWS Bedrock: s3://bucket/文件名.doc -> 文件名.doc
-                            # 阿里云/火山引擎: 从metadata中提取doc_name或直接使用content
+                            # 优先使用与文件名相关的字段，并统一取 basename 便于匹配
+                            raw = ""
                             if "s3://" in doc_id:
-                                # AWS Bedrock格式
-                                file_name = doc_id.split("/")[-1]
-                                pred_ids.append(file_name)
+                                raw = doc_id.split("/")[-1]
                             elif doc.get("title"):
-                                # 使用title作为标识
-                                pred_ids.append(doc.get("title"))
+                                raw = doc.get("title") or ""
                             elif doc.get("metadata", {}).get("doc_name"):
-                                # 使用metadata中的doc_name
-                                pred_ids.append(doc.get("metadata", {}).get("doc_name"))
+                                raw = doc.get("metadata", {}).get("doc_name") or ""
                             else:
-                                # 使用原始ID
-                                pred_ids.append(doc_id)
+                                raw = doc_id
+                            if isinstance(raw, str) and "/" in raw:
+                                raw = raw.split("/")[-1]
+                            pred_ids.append(raw if raw else doc_id)
 
                         predictions.append(pred_ids)
                         ground_truths.append(truth)
@@ -299,6 +296,7 @@ class BenchmarkRunner:
             with step_logger.step("初始化适配器") as ctx:
                 await adapter.initialize()
                 stats = await adapter.get_stats()
+                details["run_mode"] = stats.get("mode", "unknown")  # mock | real，供报告标注
                 ctx.info(f"适配器: {adapter.name}")
                 for key, value in stats.items():
                     ctx.detail(f"{key}: {value}")
@@ -409,13 +407,14 @@ class BenchmarkRunner:
         data_config = self.config.get("data", {})
 
         scale_configs = {
+            "existing": {"doc_count": 100, "queries_count": 5, "memories_count": 20},
             "tiny": {"doc_count": 10, "queries_count": 5, "memories_count": 20},
             "small": {"doc_count": 100, "queries_count": 50, "memories_count": 100},
             "medium": {"doc_count": 1000, "queries_count": 200, "memories_count": 1000},
             "large": {"doc_count": 10000, "queries_count": 500, "memories_count": 10000},
         }
 
-        default_config = scale_configs.get(scale, scale_configs["tiny"])
+        default_config = scale_configs.get(scale, scale_configs["tiny"]).copy()
 
         # 使用配置文件中的值覆盖默认值
         if scale in data_config:

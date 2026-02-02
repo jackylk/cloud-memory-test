@@ -26,6 +26,7 @@ class AliyunResourceManager(BaseResourceManager):
         try:
             # 导入阿里云SDK
             from alibabacloud_bailian20231229.client import Client as BailianClient
+            from alibabacloud_bailian20231229 import models
             from alibabacloud_tea_openapi import models as open_api_models
 
             config = open_api_models.Config(
@@ -35,15 +36,97 @@ class AliyunResourceManager(BaseResourceManager):
             )
             client = BailianClient(config)
 
-            # 列出所有工作空间
-            # 注意：百炼API可能需要workspace_id来查询具体资源
-            # 这里暂时返回空列表，需要根据实际API调整
-            logger.debug("阿里云百炼资源列表查询需要workspace_id")
+            # 如果配置了workspace_id，则查询该工作空间下的资源
+            workspace_id = getattr(self.config, 'workspace_id', None)
+            if not workspace_id:
+                logger.debug("未配置workspace_id，无法列出阿里云百炼资源")
+                return resources
+
+            # 列出知识库（索引）
+            try:
+                request = models.ListIndicesRequest()
+                response = client.list_indices(workspace_id, request)
+
+                logger.debug(f"阿里云: ListIndices响应: {response}")
+
+                if hasattr(response, 'body') and hasattr(response.body, 'data'):
+                    data = response.body.data
+                    # 可能是 indices 或 index_list
+                    indexes = getattr(data, 'indices', None) or getattr(data, 'index_list', [])
+
+                    logger.debug(f"阿里云: 找到 {len(indexes) if indexes else 0} 个知识库")
+
+                    if indexes:
+                        for index in indexes:
+                            index_id = getattr(index, 'id', None) or getattr(index, 'index_id', 'unknown')
+                            index_name = getattr(index, 'name', f"index-{index_id}")
+                            logger.debug(f"阿里云: 知识库 {index_name} ({index_id})")
+
+                            resource = CloudResource(
+                                provider="aliyun",
+                                resource_type=ResourceType.KNOWLEDGE_BASE,
+                                resource_id=str(index_id),
+                                name=index_name,
+                                status=ResourceStatus.ACTIVE,
+                                region=self.region,
+                                config={
+                                    "workspace_id": workspace_id,
+                                    "description": getattr(index, 'description', ''),
+                                }
+                            )
+                            resources.append(resource)
+                    else:
+                        logger.info("阿里云: 当前工作空间下没有知识库")
+            except Exception as e:
+                logger.warning(f"列出知识库失败: {e}")
+                import traceback
+                logger.debug(traceback.format_exc())
+
+            # 列出长期记忆
+            try:
+                request = models.ListMemoriesRequest()
+                response = client.list_memories(workspace_id, request)
+
+                logger.debug(f"阿里云: ListMemories响应: {response}")
+
+                if hasattr(response, 'body') and hasattr(response.body, 'data'):
+                    data = response.body.data
+                    memories = getattr(data, 'memories', [])
+
+                    logger.debug(f"阿里云: 找到 {len(memories) if memories else 0} 个长期记忆")
+
+                    if memories:
+                        for memory in memories:
+                            memory_id = getattr(memory, 'memory_id', None) or getattr(memory, 'id', 'unknown')
+                            memory_name = getattr(memory, 'name', f"memory-{memory_id}")
+                            logger.debug(f"阿里云: 长期记忆 {memory_name} ({memory_id})")
+
+                            resource = CloudResource(
+                                provider="aliyun",
+                                resource_type=ResourceType.MEMORY,
+                                resource_id=str(memory_id),
+                                name=memory_name,
+                                status=ResourceStatus.ACTIVE,
+                                region=self.region,
+                                config={
+                                    "workspace_id": workspace_id,
+                                    "description": getattr(memory, 'description', ''),
+                                }
+                            )
+                            resources.append(resource)
+                    else:
+                        logger.info("阿里云: 当前工作空间下没有长期记忆")
+            except Exception as e:
+                logger.warning(f"列出长期记忆失败: {e}")
+                import traceback
+                logger.debug(traceback.format_exc())
 
         except ImportError:
             logger.warning("阿里云百炼SDK未安装，跳过资源查询")
         except Exception as e:
             logger.error(f"查询阿里云资源失败: {e}")
+            import traceback
+            logger.debug(traceback.format_exc())
 
         return resources
 
@@ -122,14 +205,14 @@ class AliyunResourceManager(BaseResourceManager):
             if not workspace_id:
                 raise ValueError("创建百炼记忆需要workspace_id")
 
-            # 创建长期记忆
+            # 创建长期记忆（API只接受description参数）
+            description = config.get("description", f"Benchmark test memory - {name}")
             request = models.CreateMemoryRequest(
-                name=name,
-                description=config.get("description", f"Benchmark test memory - {name}"),
+                description=description
             )
 
             response = client.create_memory(workspace_id, request)
-            memory_id = response.body.data.memory_id
+            memory_id = response.body.memory_id
 
             logger.info(f"百炼长期记忆创建成功: {memory_id}")
 
@@ -137,12 +220,13 @@ class AliyunResourceManager(BaseResourceManager):
                 provider="aliyun",
                 resource_type=ResourceType.MEMORY,
                 resource_id=memory_id,
-                name=name,
+                name=name,  # 使用传入的name作为显示名称
                 status=ResourceStatus.ACTIVE,
                 region=self.region,
                 created_at=datetime.now(),
                 config={
                     "workspace_id": workspace_id,
+                    "description": description,
                 }
             )
 
@@ -150,6 +234,8 @@ class AliyunResourceManager(BaseResourceManager):
             raise RuntimeError("请安装阿里云百炼SDK: pip install alibabacloud-bailian20231229")
         except Exception as e:
             logger.error(f"创建百炼长期记忆失败: {e}")
+            import traceback
+            logger.debug(traceback.format_exc())
             raise
 
     async def delete_resource(self, resource_id: str) -> bool:

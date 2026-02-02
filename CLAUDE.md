@@ -62,10 +62,15 @@ python -m src list-adapters
 python -m src test-adapter kb      # 测试知识库适配器
 python -m src test-adapter memory  # 测试记忆适配器
 
-# 运行基准测试
+# 运行基准测试（知识库已预先入库时，不需 -s，仅查询不生成/上传）
+python -m src benchmark -t kb -r           # 仅知识库，已有文档，直接生成报告
+python -m src benchmark -t memory -r       # 仅记忆系统测试，生成报告
 python -m src benchmark -s tiny -t all     # tiny规模,全部测试
 python -m src benchmark -s small -t kb     # small规模,仅知识库
 python -m src benchmark -s tiny -t memory  # tiny规模,仅记忆
+
+# 运行专用测试脚本
+python test_memory_systems.py  # 测试所有记忆系统并生成独立报告
 
 # 运行预定义测试套件
 python -m src run-suite --suite quick   # 快速测试
@@ -80,7 +85,8 @@ python -m src compare -t memory -s tiny      # 记忆系统对比
 python -m src stress-test -t kb -c 1,10,50 -d 30
 
 # 运行基准测试并自动生成报告
-python -m src benchmark -s tiny -r
+python -m src benchmark -t kb -r           # 知识库已有文档时推荐
+python -m src benchmark -s tiny -r        # 需生成上传数据时指定规模
 
 # 使用详细输出
 python -m src -v benchmark -s tiny

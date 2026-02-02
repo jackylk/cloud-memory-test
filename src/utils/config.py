@@ -117,6 +117,9 @@ class AliyunConfig(BaseModel):
     enable_reranking: bool = True
     rerank_top_n: int = 5
     rerank_min_score: float = 0.01
+    # 记忆系统配置
+    memory_id_for_longterm: Optional[str] = None
+    agent_id: Optional[str] = None
 
 
 class HuaweiConfig(BaseModel):

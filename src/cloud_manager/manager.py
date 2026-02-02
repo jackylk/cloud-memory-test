@@ -8,6 +8,7 @@ from .resources import CloudResource, ResourceType, ResourceStatus
 from .providers.volcengine import VolcengineResourceManager
 from .providers.aliyun import AliyunResourceManager
 from .providers.gcp import GCPResourceManager
+from .providers.aws import AWSResourceManager
 from ..utils.config import Config
 
 
@@ -26,12 +27,19 @@ class CloudResourceManager:
         self.providers = {}
 
         # 初始化各云服务的资源管理器
+        # AWS
+        if hasattr(config, 'aws'):
+            self.providers['aws'] = AWSResourceManager(config.aws)
+
+        # 火山引擎
         if hasattr(config, 'volcengine') and config.volcengine.access_key:
             self.providers['volcengine'] = VolcengineResourceManager(config.volcengine)
 
+        # 阿里云
         if hasattr(config, 'aliyun') and config.aliyun.access_key_id:
             self.providers['aliyun'] = AliyunResourceManager(config.aliyun)
 
+        # Google Cloud
         if hasattr(config, 'gcp') and getattr(config.gcp, 'project_id', None):
             self.providers['gcp'] = GCPResourceManager(config.gcp)
 

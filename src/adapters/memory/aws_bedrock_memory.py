@@ -1,9 +1,6 @@
 """AWS Bedrock Memory 适配器
 
-支持两种模式:
-1. Mock 模式: 使用本地字典存储模拟行为（无需凭证）
-2. 真实模式: 使用 AWS Bedrock AgentCore Memory API
-
+使用 bedrock-agentcore MemorySessionManager
 SDK: pip install bedrock-agentcore bedrock-agentcore-starter-toolkit boto3
 """
 
@@ -25,8 +22,8 @@ class AWSBedrockMemoryAdapter(MemoryAdapter):
 
     特点:
     - 支持 mock 模式用于无凭证测试
-    - 真实模式使用 AWS Bedrock AgentCore Memory
-    - 支持短期记忆(events)和长期记忆(extracted insights)
+    - 真实模式使用 bedrock-agentcore MemorySessionManager
+    - 支持对话记忆存储和检索
     """
 
     def __init__(self, config: Dict[str, Any]):
@@ -42,8 +39,8 @@ class AWSBedrockMemoryAdapter(MemoryAdapter):
         # 如果没有 memory_id，启用 mock 模式
         self._mock_mode = not self._memory_id
 
-        # SDK 客户端（真实模式）
-        self._memory_client = None
+        # MemorySessionManager 实例
+        self._session_manager = None
 
         # Mock 模式存储
         self._memories: Dict[str, Memory] = {}  # memory_id -> Memory
@@ -67,53 +64,47 @@ class AWSBedrockMemoryAdapter(MemoryAdapter):
             logger.debug(f"  → Memory ID: {self._memory_id}")
 
             try:
-                # 导入 AWS Bedrock AgentCore SDK
-                try:
-                    from bedrock_agentcore_starter_toolkit.memory import Memory as BedrockMemory
-                    import boto3
+                from bedrock_agentcore.memory import MemorySessionManager
+                import boto3
 
-                    # 创建 boto3 session
-                    session_kwargs = {}
-                    if self._access_key_id and self._secret_access_key:
-                        session_kwargs["aws_access_key_id"] = self._access_key_id
-                        session_kwargs["aws_secret_access_key"] = self._secret_access_key
-                    session_kwargs["region_name"] = self._region
+                # 创建 boto3 session
+                session_kwargs = {}
+                if self._access_key_id and self._secret_access_key:
+                    session_kwargs["aws_access_key_id"] = self._access_key_id
+                    session_kwargs["aws_secret_access_key"] = self._secret_access_key
+                session_kwargs["region_name"] = self._region
 
-                    session = boto3.Session(**session_kwargs)
+                boto3_session = boto3.Session(**session_kwargs)
 
-                    # 创建 Memory 客户端
-                    self._memory_client = BedrockMemory(
-                        memory_id=self._memory_id,
-                        session=session
-                    )
+                # 创建 MemorySessionManager
+                self._session_manager = MemorySessionManager(
+                    memory_id=self._memory_id,
+                    boto3_session=boto3_session
+                )
 
-                    logger.debug("  → Bedrock Memory 客户端创建成功")
+                logger.debug("  → MemorySessionManager 创建成功")
 
-                except ImportError:
-                    logger.error(
-                        "AWS Bedrock AgentCore SDK 未安装，请运行: "
-                        "pip install bedrock-agentcore bedrock-agentcore-starter-toolkit"
-                    )
-                    raise RuntimeError(
-                        "bedrock-agentcore is required for AWS Bedrock Memory adapter"
-                    )
-
+            except ImportError:
+                logger.error("请安装: pip install bedrock-agentcore boto3")
+                raise RuntimeError("bedrock-agentcore is required for AWS Bedrock Memory adapter")
             except Exception as e:
-                logger.error(f"初始化 Bedrock Memory 客户端失败: {e}")
+                logger.error(f"初始化 MemorySessionManager 失败: {e}")
                 raise
 
         self._initialized = True
         logger.debug("  → 初始化完成")
 
     async def add_memory(self, memory: Memory) -> MemoryAddResult:
-        """添加记忆"""
+        """添加记忆（对话消息）"""
         if not self._initialized:
             raise RuntimeError("适配器未初始化")
 
+        start_time = time.time()
+        memory_id = memory.id or str(uuid.uuid4())
+        memory.id = memory_id
+
         if self._mock_mode:
             # Mock 模式：存储到本地
-            memory_id = memory.id or str(uuid.uuid4())
-            memory.id = memory_id
             self._memories[memory_id] = memory
 
             # 更新用户记忆列表
@@ -121,31 +112,48 @@ class AWSBedrockMemoryAdapter(MemoryAdapter):
                 self._user_memories[memory.user_id] = []
             self._user_memories[memory.user_id].append(memory_id)
 
+            elapsed_ms = (time.time() - start_time) * 1000
             logger.debug(f"[Mock] 添加记忆: {memory_id} for user {memory.user_id}")
 
-            return MemoryAddResult(memory_id=memory_id, success=True, latency_ms=0.0)
-        else:
-            # 真实模式：调用 Bedrock Memory API
-            try:
-                # 创建 event（短期记忆）
-                event_data = {
-                    "user_id": memory.user_id,
-                    "content": memory.content,
-                    "metadata": memory.metadata,
-                    "session_id": memory.session_id or str(uuid.uuid4()),
-                }
+            return MemoryAddResult(memory_id=memory_id, success=True, latency_ms=elapsed_ms)
 
-                response = self._memory_client.create_event(**event_data)
-                memory_id = response.get("event_id", str(uuid.uuid4()))
+        # 真实模式：使用 MemorySessionManager
+        try:
+            from bedrock_agentcore.memory.constants import ConversationalMessage, MessageRole
 
-                logger.debug(f"添加记忆: {memory_id} for user {memory.user_id}")
+            # 创建或获取 session
+            session_id = memory.session_id or f"session_{memory.user_id}"
+            session = self._session_manager.create_memory_session(
+                actor_id=memory.user_id,
+                session_id=session_id
+            )
 
-                return MemoryAddResult(memory_id=memory_id, success=True, latency_ms=0.0)
+            # 添加对话消息
+            # 根据 memory_type 决定角色
+            role = MessageRole.USER if memory.memory_type != "assistant" else MessageRole.ASSISTANT
 
-            except Exception as e:
-                logger.error(f"添加记忆失败: {e}")
-                # 返回 fallback ID
-                return MemoryAddResult(memory_id=str(uuid.uuid4()))
+            session.add_turns(
+                messages=[ConversationalMessage(memory.content, role)]
+            )
+
+            elapsed_ms = (time.time() - start_time) * 1000
+            logger.debug(f"添加记忆: session={session_id}, user={memory.user_id}")
+
+            return MemoryAddResult(
+                memory_id=f"{session_id}_{memory_id}",
+                success=True,
+                latency_ms=elapsed_ms
+            )
+
+        except Exception as e:
+            elapsed_ms = (time.time() - start_time) * 1000
+            logger.error(f"添加记忆失败: {e}")
+            return MemoryAddResult(
+                memory_id=memory_id,
+                success=False,
+                latency_ms=elapsed_ms,
+                details={"error": str(e)}
+            )
 
     async def add_memories_batch(self, memories: List[Memory]) -> List[MemoryAddResult]:
         """批量添加记忆"""
@@ -197,51 +205,60 @@ class AWSBedrockMemoryAdapter(MemoryAdapter):
                 latency_ms=elapsed_ms,
                 total_results=len(memories)
             )
-        else:
-            # 真实模式：调用 search_long_term_memories
-            try:
-                response = self._memory_client.search_long_term_memories(
-                    query=query,
-                    user_id=user_id,
-                    max_results=top_k
-                )
 
-                elapsed_ms = (time.time() - start_time) * 1000
+        # 真实模式：使用 search_long_term_memories
+        try:
+            # 使用 MemorySessionManager 搜索
+            # namespace_prefix 用于过滤特定用户的记忆
+            response = self._session_manager.search_long_term_memories(
+                query=query,
+                namespace_prefix=user_id,  # 使用 namespace_prefix 过滤用户记忆
+                top_k=top_k,
+                max_results=top_k
+            )
 
-                # 解析结果
-                memories = []
-                scores = []
+            elapsed_ms = (time.time() - start_time) * 1000
 
-                for item in response.get("memories", []):
+            # 解析结果 - response 是 List[MemoryRecord]
+            memories = []
+            scores = []
+
+            if isinstance(response, list):
+                for item in response:
+                    # MemoryRecord 包含 text, memory_id, score 等
+                    content = getattr(item, 'text', '') or getattr(item, 'content', '')
+                    memory_id = getattr(item, 'memory_id', str(uuid.uuid4()))
+                    score = getattr(item, 'score', 0.0)
+
                     memory = Memory(
-                        id=item.get("memory_id"),
+                        id=memory_id,
                         user_id=user_id,
-                        content=item.get("content", ""),
-                        metadata=item.get("metadata", {}),
+                        content=content,
+                        metadata={},
                         memory_type="long_term"
                     )
                     memories.append(memory)
-                    scores.append(item.get("score", 0.0))
+                    scores.append(score)
 
-                logger.debug(f"搜索记忆: 找到 {len(memories)} 个结果")
+            logger.debug(f"搜索记忆: 找到 {len(memories)} 个结果")
 
-                return MemorySearchResult(
-                    memories=memories,
-                    scores=scores,
-                    latency_ms=elapsed_ms,
-                    total_results=len(memories)
-                )
+            return MemorySearchResult(
+                memories=memories,
+                scores=scores,
+                latency_ms=elapsed_ms,
+                total_results=len(memories)
+            )
 
-            except Exception as e:
-                elapsed_ms = (time.time() - start_time) * 1000
-                logger.error(f"搜索记忆失败: {e}")
+        except Exception as e:
+            elapsed_ms = (time.time() - start_time) * 1000
+            logger.error(f"搜索记忆失败: {e}")
 
-                return MemorySearchResult(
-                    memories=[],
-                    scores=[],
-                    latency_ms=elapsed_ms,
-                    total_results=0
-                )
+            return MemorySearchResult(
+                memories=[],
+                scores=[],
+                latency_ms=elapsed_ms,
+                total_results=0
+            )
 
     async def update_memory(self, memory_id: str, content: str) -> bool:
         """更新记忆内容"""
@@ -254,14 +271,10 @@ class AWSBedrockMemoryAdapter(MemoryAdapter):
                 logger.debug(f"[Mock] 更新记忆: {memory_id}")
                 return True
             return False
-        else:
-            try:
-                # Bedrock Memory 不直接支持更新，需要删除后重新添加
-                logger.warning("Bedrock Memory 不支持直接更新，建议删除后重新添加")
-                return False
-            except Exception as e:
-                logger.error(f"更新记忆失败: {e}")
-                return False
+
+        # 真实模式：Bedrock Memory 不直接支持更新
+        logger.warning("AWS Bedrock Memory 不支持直接更新单个记忆")
+        return False
 
     async def delete_memory(self, memory_id: str) -> bool:
         """删除记忆"""
@@ -275,20 +288,21 @@ class AWSBedrockMemoryAdapter(MemoryAdapter):
 
                 # 从用户记忆列表中移除
                 if memory.user_id in self._user_memories:
-                    self._user_memories[memory.user_id].remove(memory_id)
+                    if memory_id in self._user_memories[memory.user_id]:
+                        self._user_memories[memory.user_id].remove(memory_id)
 
                 logger.debug(f"[Mock] 删除记忆: {memory_id}")
                 return True
             return False
-        else:
-            try:
-                # 调用删除 event API
-                self._memory_client.delete_event(event_id=memory_id)
-                logger.debug(f"删除记忆: {memory_id}")
-                return True
-            except Exception as e:
-                logger.error(f"删除记忆失败: {e}")
-                return False
+
+        # 真实模式：调用 delete_event
+        try:
+            self._session_manager.delete_event(event_id=memory_id)
+            logger.debug(f"删除记忆: {memory_id}")
+            return True
+        except Exception as e:
+            logger.error(f"删除记忆失败: {e}")
+            return False
 
     async def get_user_memories(
         self,
@@ -304,32 +318,42 @@ class AWSBedrockMemoryAdapter(MemoryAdapter):
             memories = [self._memories[mid] for mid in memory_ids if mid in self._memories]
             logger.debug(f"[Mock] 获取用户记忆: {len(memories)} 个")
             return memories
-        else:
-            try:
-                # 调用 list_events API
-                response = self._memory_client.list_events(
-                    user_id=user_id,
-                    max_results=limit
-                )
 
-                memories = []
-                for event in response.get("events", []):
-                    memory = Memory(
-                        id=event.get("event_id"),
-                        user_id=user_id,
-                        content=event.get("content", ""),
-                        metadata=event.get("metadata", {}),
-                        session_id=event.get("session_id"),
-                        memory_type="event"
+        # 真实模式：列出用户的 sessions 和 events
+        try:
+            # 列出用户的所有 sessions
+            sessions = self._session_manager.list_actor_sessions(actor_id=user_id)
+
+            memories = []
+            for session_info in sessions[:limit]:
+                session_id = session_info.get('session_id')
+                if session_id:
+                    # 获取该 session 的最近对话
+                    session = self._session_manager.create_memory_session(
+                        actor_id=user_id,
+                        session_id=session_id
                     )
-                    memories.append(memory)
 
-                logger.debug(f"获取用户记忆: {len(memories)} 个")
-                return memories
+                    # 获取最近的对话记录
+                    turns = session.get_last_k_turns(k=10)
+                    for turn in turns:
+                        if hasattr(turn, 'text'):
+                            memory = Memory(
+                                id=str(uuid.uuid4()),
+                                user_id=user_id,
+                                content=turn.text,
+                                session_id=session_id,
+                                metadata={},
+                                memory_type="event"
+                            )
+                            memories.append(memory)
 
-            except Exception as e:
-                logger.error(f"获取用户记忆失败: {e}")
-                return []
+            logger.debug(f"获取用户记忆: {len(memories)} 个")
+            return memories[:limit]
+
+        except Exception as e:
+            logger.error(f"获取用户记忆失败: {e}")
+            return []
 
     async def get_stats(self) -> Dict[str, Any]:
         """获取统计信息"""
@@ -346,7 +370,7 @@ class AWSBedrockMemoryAdapter(MemoryAdapter):
                 "mode": "real",
                 "region": self._region,
                 "memory_id": self._memory_id,
-                "client_ready": self._memory_client is not None
+                "session_manager_ready": self._session_manager is not None
             }
 
     async def cleanup(self) -> None:
@@ -355,7 +379,7 @@ class AWSBedrockMemoryAdapter(MemoryAdapter):
             self._memories.clear()
             self._user_memories.clear()
 
-        self._memory_client = None
+        self._session_manager = None
         self._initialized = False
         logger.debug("AWSBedrockMemory 已清理")
 
@@ -366,11 +390,11 @@ class AWSBedrockMemoryAdapter(MemoryAdapter):
 
         if self._mock_mode:
             return True
-        else:
-            try:
-                # 尝试列出 events 来验证连接
-                self._memory_client.list_events(max_results=1)
-                return True
-            except Exception as e:
-                logger.warning(f"健康检查失败: {e}")
-                return False
+
+        try:
+            # 尝试列出 actors 来验证连接
+            actors = self._session_manager.list_actors()
+            return True
+        except Exception as e:
+            logger.warning(f"健康检查失败: {e}")
+            return False

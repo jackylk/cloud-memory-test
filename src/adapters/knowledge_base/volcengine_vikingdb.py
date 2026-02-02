@@ -400,15 +400,32 @@ class VolcengineVikingDBAdapter(KnowledgeBaseAdapter):
 
             if result_list:
                 for item in result_list:
-                    # 每个结果包含 content, score, doc_name, chunk_id 等字段
+                    # 每个结果可能包含 content, score, doc_name/document_name/file_name, chunk_id 等字段
+                    # 多键尝试以兼容不同 API 版本，用于与 ground truth 文件名匹配
+                    doc_name = (
+                        item.get("doc_name")
+                        or item.get("document_name")
+                        or item.get("file_name")
+                        or item.get("title")
+                        or ""
+                    )
+
+                    # 调试：打印API返回的字段
+                    if not doc_name and len(documents) == 0:
+                        logger.warning(f"火山引擎API返回的item字段: {list(item.keys())}")
+                        logger.warning(f"doc_name为空，chunk_id: {item.get('chunk_id')}")
+
+                    if isinstance(doc_name, str) and "/" in doc_name:
+                        doc_name = doc_name.split("/")[-1]
+                    chunk_id = item.get("chunk_id", item.get("id", f"doc_{len(documents)}"))
                     documents.append({
-                        "id": item.get("chunk_id", item.get("id", f"doc_{len(documents)}")),
+                        "id": chunk_id,
                         "content": item.get("content", ""),
                         "metadata": {
-                            "doc_name": item.get("doc_name", ""),
-                            "chunk_id": item.get("chunk_id"),
+                            "doc_name": doc_name,
+                            "chunk_id": chunk_id,
                         },
-                        "title": item.get("doc_name", item.get("title"))
+                        "title": doc_name or str(chunk_id),
                     })
                     scores.append(item.get("score", 0.0))
 

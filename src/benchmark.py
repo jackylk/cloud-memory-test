@@ -190,6 +190,13 @@ def get_adapters(config: Config, adapter_type: str, adapter_names: list = None):
 
             all_adapters = {}
 
+            # 添加本地Mem0作为对比基准
+            all_adapters["Mem0LocalAdapter"] = Mem0LocalAdapter({
+                "vector_store": config.local.mem0.vector_store,
+                "embedding_model": config.local.mem0.embedding_model,
+                "use_simple_store": True,
+            })
+
             # AWS Bedrock Memory
             aws_mem_config = {
                 "region": config.aws.region,
@@ -211,10 +218,10 @@ def get_adapters(config: Config, adapter_type: str, adapter_names: list = None):
             # }
             # all_adapters["GoogleVertexMemory"] = GoogleVertexMemoryAdapter(gcp_mem_config)
 
-            # Volcengine AgentKit Memory
+            # Volcengine AgentKit Memory (使用 VeADK + VikingDB)
             volcengine_mem_config = {
                 "region": config.volcengine.region,
-                "agent_id": getattr(config.volcengine, 'agent_id', None),
+                "collection_name": getattr(config.volcengine, 'memory_collection_name', 'cloud_memory_test_ltm'),
             }
             if config.volcengine.access_key:
                 volcengine_mem_config["access_key"] = config.volcengine.access_key.get_secret_value()
@@ -299,8 +306,8 @@ def cli(ctx, config, verbose):
 
 
 @cli.command()
-@click.option("--scale", "-s", default="tiny", type=click.Choice(["tiny", "small", "medium", "large"]),
-              help="数据规模: tiny(10文档), small(100), medium(1000), large(10000)")
+@click.option("--scale", "-s", default=None, type=click.Choice(["existing", "tiny", "small", "medium", "large"]),
+              help="数据规模: existing(已有文档仅查询), tiny/small/medium/large(需生成上传)")
 @click.option("--type", "-t", "test_type", default="all", type=click.Choice(["all", "kb", "memory"]),
               help="测试类型: all(全部), kb(知识库), memory(记忆系统)")
 @click.option("--output", "-o", default=None, help="保存结果到JSON文件（可选）")
@@ -311,26 +318,28 @@ def cli(ctx, config, verbose):
 def benchmark(ctx, scale, test_type, output, report, report_dir, skip_upload):
     """运行基准测试
 
-    数据规模说明:
-      tiny    - 10个文档, 5个查询, 20个记忆（快速测试，约1分钟）
-      small   - 100个文档, 20个查询, 100个记忆（约5分钟）
-      medium  - 1000个文档, 50个查询, 500个记忆（约15分钟）
-      large   - 10000个文档, 100个查询, 2000个记忆（约1小时）
+    知识库已预先入库时（不需 tiny/small 等规模）:
+      python -m src benchmark -t kb -r          # 仅查询，不生成/上传，自动生成报告
 
-    生成测试报告的两种方式:
-      方式1: 运行时直接生成
-        python -m src benchmark -s tiny -r
+    数据规模说明（需生成上传时再指定 -s）:
+      existing - 已有文档，仅执行查询与质量评估（100 文档规模，5 查询）
+      tiny     - 10个文档, 5个查询
+      small    - 100个文档, 50个查询
+      medium   - 1000个文档, 200个查询
+      large    - 10000个文档, 500个查询
 
-      方式2: 先保存结果，再生成报告
-        python -m src benchmark -s tiny -o results.json
-        python -m src report results.json
-
-    常用示例:
-      python -m src benchmark -s tiny -t all -r    # 运行全部测试并生成报告
-      python -m src benchmark -s small -t kb       # 只测试知识库适配器
-      python -m src benchmark -s tiny -t memory    # 只测试记忆系统
+    生成测试报告:
+      python -m src benchmark -t kb -r          # 知识库测试并生成报告
+      python -m src benchmark -s tiny -o results.json && python -m src report results.json
     """
     config: Config = ctx.obj["config"]
+
+    # 未指定规模时：仅知识库则用 existing（已有文档仅查询），否则用 tiny
+    if scale is None:
+        scale = "existing" if test_type == "kb" else "tiny"
+    # existing 规模下知识库测试强制跳过上传，不生成上传数据
+    if scale == "existing" and test_type in ["all", "kb"]:
+        skip_upload = True
 
     logger.info("=" * 60)
     logger.info("云端知识库和记忆系统性能测试")
@@ -338,6 +347,8 @@ def benchmark(ctx, scale, test_type, output, report, report_dir, skip_upload):
     logger.info(f"运行模式: {config.mode}")
     logger.info(f"数据规模: {scale}")
     logger.info(f"测试类型: {test_type}")
+    if skip_upload and test_type in ["all", "kb"]:
+        logger.info("(跳过入库，仅对已有知识库执行查询与质量评估)")
     logger.info("=" * 60)
 
     # 转换配置为字典
@@ -909,22 +920,24 @@ def list_adapters(ctx):
 
 
 @cli.command()
-@click.option("--action", "-a", type=click.Choice(["list", "create", "delete", "cleanup"]),
+@click.option("--action", "-a", type=click.Choice(["list", "info", "create", "delete", "cleanup"]),
               default="list", help="操作类型")
-@click.option("--provider", "-p", help="云服务提供商 (volcengine, aliyun, gcp)")
+@click.option("--provider", "-p", help="云服务提供商 (aws, volcengine, aliyun, gcp)")
 @click.option("--resource-type", "-t", type=click.Choice(["kb", "memory"]),
               help="资源类型 (kb=知识库, memory=记忆库)")
 @click.option("--name", "-n", help="资源名称")
-@click.option("--resource-id", "-r", help="资源ID（用于删除）")
+@click.option("--resource-id", "-r", help="资源ID（用于查询详情或删除）")
 @click.option("--confirm", is_flag=True, help="确认删除操作")
+@click.option("--verbose", "-v", is_flag=True, help="显示详细信息")
 @click.pass_context
-def cloud_resources(ctx, action, provider, resource_type, name, resource_id, confirm):
+def cloud_resources(ctx, action, provider, resource_type, name, resource_id, confirm, verbose):
     """管理云端知识库和记忆库资源
 
     用于创建、查询、删除云服务资源，避免闲置资源产生费用。
 
     操作类型:
       list    - 列出所有云资源（默认）
+      info    - 查询资源详细信息
       create  - 创建新资源
       delete  - 删除指定资源
       cleanup - 删除所有资源（危险操作）
@@ -933,8 +946,14 @@ def cloud_resources(ctx, action, provider, resource_type, name, resource_id, con
       # 列出所有资源
       python -m src cloud-resources
 
+      # 查看资源详情
+      python -m src cloud-resources -a info -p volcengine -r collection-name
+
       # 在火山引擎创建知识库
       python -m src cloud-resources -a create -p volcengine -t kb -n test-kb
+
+      # 在阿里云创建记忆库
+      python -m src cloud-resources -a create -p aliyun -t memory -n test-memory
 
       # 删除指定资源
       python -m src cloud-resources -a delete -p volcengine -r collection-name --confirm
@@ -956,21 +975,70 @@ def cloud_resources(ctx, action, provider, resource_type, name, resource_id, con
             if not resources:
                 click.echo("\n未找到云资源")
                 click.echo("提示: 您可以使用 -a create 创建测试资源")
+                click.echo(f"\n已配置的云服务: {', '.join(manager.get_configured_providers())}")
                 return
 
             click.echo(f"\n找到 {len(resources)} 个云资源:\n")
-            click.echo(f"{'云服务':<12} {'类型':<15} {'资源ID':<30} {'状态':<10}")
-            click.echo("-" * 70)
 
-            for res in resources:
-                click.echo(
-                    f"{res.provider:<12} "
-                    f"{res.resource_type.value:<15} "
-                    f"{res.resource_id:<30} "
-                    f"{res.status.value:<10}"
-                )
+            if verbose:
+                # 详细模式：显示所有字段
+                for i, res in enumerate(resources, 1):
+                    click.echo(f"{i}. {res.name}")
+                    click.echo(f"   云服务: {res.provider}")
+                    click.echo(f"   类型: {res.resource_type.value}")
+                    click.echo(f"   资源ID: {res.resource_id}")
+                    click.echo(f"   状态: {res.status.value}")
+                    click.echo(f"   区域: {res.region}")
+                    if res.created_at:
+                        click.echo(f"   创建时间: {res.created_at}")
+                    if res.config:
+                        click.echo(f"   配置: {res.config}")
+                    click.echo()
+            else:
+                # 简洁模式：表格输出
+                click.echo(f"{'云服务':<12} {'类型':<15} {'名称':<25} {'资源ID':<30} {'状态':<10}")
+                click.echo("-" * 95)
+
+                for res in resources:
+                    name_display = res.name[:24] if len(res.name) > 24 else res.name
+                    id_display = res.resource_id[:29] if len(res.resource_id) > 29 else res.resource_id
+                    click.echo(
+                        f"{res.provider:<12} "
+                        f"{res.resource_type.value:<15} "
+                        f"{name_display:<25} "
+                        f"{id_display:<30} "
+                        f"{res.status.value:<10}"
+                    )
 
             click.echo(f"\n已配置的云服务: {', '.join(manager.get_configured_providers())}")
+            click.echo(f"使用 -v 选项查看详细信息")
+
+        elif action == "info":
+            if not provider or not resource_id:
+                click.echo("错误: 查询详情需要 --provider 和 --resource-id")
+                return
+
+            logger.info(f"查询资源详情: {provider}/{resource_id}")
+            resource = await manager.get_resource_status(provider, resource_id)
+
+            if resource:
+                click.echo(f"\n资源详情:\n")
+                click.echo(f"  云服务: {resource.provider}")
+                click.echo(f"  类型: {resource.resource_type.value}")
+                click.echo(f"  名称: {resource.name}")
+                click.echo(f"  资源ID: {resource.resource_id}")
+                click.echo(f"  状态: {resource.status.value}")
+                click.echo(f"  区域: {resource.region}")
+                if resource.created_at:
+                    click.echo(f"  创建时间: {resource.created_at}")
+                if resource.config:
+                    click.echo(f"\n  配置信息:")
+                    for key, value in resource.config.items():
+                        click.echo(f"    {key}: {value}")
+                if resource.estimated_cost_per_hour:
+                    click.echo(f"\n  预估费用: ${resource.estimated_cost_per_hour:.4f}/小时")
+            else:
+                click.echo(f"\n✗ 未找到资源: {resource_id}")
 
         elif action == "create":
             if not provider or not resource_type or not name:
@@ -980,17 +1048,27 @@ def cloud_resources(ctx, action, provider, resource_type, name, resource_id, con
             logger.info(f"创建资源: {provider}/{resource_type}/{name}")
 
             try:
+                create_config = {"description": f"Benchmark test - {name}"}
+
                 if resource_type == "kb":
+                    create_config["dimension"] = 384
                     resource = await manager.create_knowledge_base(
                         provider,
                         name,
-                        {"dimension": 384, "description": f"Benchmark test - {name}"}
+                        create_config
                     )
                 else:
+                    # 记忆库需要workspace_id
+                    if provider == "aliyun":
+                        if not hasattr(config.aliyun, 'workspace_id') or not config.aliyun.workspace_id:
+                            click.echo("\n✗ 创建阿里云记忆库需要配置 workspace_id")
+                            return
+                        create_config["workspace_id"] = config.aliyun.workspace_id
+
                     resource = await manager.create_memory(
                         provider,
                         name,
-                        {"description": f"Benchmark test memory - {name}"}
+                        create_config
                     )
 
                 click.echo(f"\n✓ 资源创建成功!")
@@ -998,16 +1076,36 @@ def cloud_resources(ctx, action, provider, resource_type, name, resource_id, con
                 click.echo(f"  类型: {resource.resource_type.value}")
                 click.echo(f"  资源ID: {resource.resource_id}")
                 click.echo(f"  名称: {resource.name}")
+                click.echo(f"  区域: {resource.region}")
 
                 # 更新配置文件提示
-                click.echo(f"\n提示: 请将资源ID添加到 config/config.yaml 中:")
+                click.echo(f"\n✓ 请将资源ID添加到 config/config.yaml 中:")
                 if provider == "volcengine" and resource_type == "kb":
-                    click.echo(f"  volcengine.collection_name: \"{resource.resource_id}\"")
+                    click.echo(f"  volcengine:")
+                    click.echo(f"    collection_name: \"{resource.resource_id}\"")
+                elif provider == "volcengine" and resource_type == "memory":
+                    click.echo(f"  volcengine:")
+                    click.echo(f"    agent_id: \"{resource.resource_id}\"")
                 elif provider == "aliyun" and resource_type == "kb":
-                    click.echo(f"  aliyun.index_id: \"{resource.resource_id}\"")
+                    click.echo(f"  aliyun:")
+                    click.echo(f"    index_id: \"{resource.resource_id}\"")
+                elif provider == "aliyun" and resource_type == "memory":
+                    click.echo(f"  aliyun:")
+                    click.echo(f"    memory_id_for_longterm: \"{resource.resource_id}\"")
+                elif provider == "aws" and resource_type == "kb":
+                    click.echo(f"  aws:")
+                    click.echo(f"    knowledge_base_id: \"{resource.resource_id}\"")
+                elif provider == "aws" and resource_type == "memory":
+                    click.echo(f"  aws:")
+                    click.echo(f"    memory_id: \"{resource.resource_id}\"")
 
+            except NotImplementedError as e:
+                click.echo(f"\n⚠ {e}")
             except Exception as e:
                 click.echo(f"\n✗ 创建失败: {e}")
+                import traceback
+                if verbose:
+                    click.echo(traceback.format_exc())
 
         elif action == "delete":
             if not provider or not resource_id:

@@ -25,7 +25,18 @@
       "Bash(pip3 list:*)",
       "Bash(aws s3 ls:*)",
       "Bash(aws ec2 describe-vpcs:*)",
-      "Bash(aws ec2 create-vpc:*)"
+      "Bash(aws ec2 create-vpc:*)",
+      "Bash(python -m src:*)",
+      "Bash(python test_memory_systems.py:*)",
+      "Bash(ls:*)",
+      "Bash(pip search:*)",
+      "Bash(xargs ls:*)",
+      "Bash(xargs cat:*)",
+      "Bash(python /tmp/test_volcengine_signature.py:*)",
+      "Bash(pip show:*)",
+      "Bash(python /tmp/test_volcengine_veadk.py:*)",
+      "Bash(python /tmp/test_aws_bedrock_memory.py:*)",
+      "Bash(tee:*)"
     ]
   }
 }
